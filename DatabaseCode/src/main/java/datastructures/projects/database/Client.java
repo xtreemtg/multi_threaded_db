@@ -22,7 +22,8 @@ public class Client {
         list.add("INSERT INTO YCStudent (FirstName, LastName, GPA, BannerID) VALUES ('Basia', 'Ebel', 4.07, 8000909);");
         list.add("INSERT INTO YCStudent (FirstName, LastName, GPA, SSNum, BannerID) VALUES ('Gavriel', 'Baron', 2.9, 809, 04659234);");
         list.add("CREATE INDEX SSNum_Index on YCStudent (SSNum);");
-        list.add("SELECT * FROM YCStudent WHERE GPA < 4.0 OR FirstName = 'Basia'");
+       // list.add("SELECT FirstName, LastName FROM YCStudent WHERE SSNum = 90");
+        list.add("SELECT FirstName, Class FROM YCStudent WHERE GPA < 4.0 OR FirstName = 'Basia'");
         list.add("SELECT * FROM YCStudent;");
         list.add("SELECT GPA, LastName FROM YCStudent;");
         list.add("SELECT * FROM YCStudent ORDER BY GPA DESC, FirstName ASC, SSNum DESC;");
@@ -31,19 +32,19 @@ public class Client {
         list.add("SELECT AVG (GPA) FROM YCStudent;");
         list.add("SELECT MAX (BannerID) FROM YCStudent;");
         list.add("SELECT FirstName, LastName, SSNum from YCStudent WHERE GPA = 3.9 OR FirstName = 'Noah' AND SSNum > 37;");
-        list.add("UPDATE YCStudent SET Class = 'Super Senior' WHERE SSNum < 809;");
-        list.add("DELETE FROM YCStudent WHERE GPA < 4.0 AND FirstName = 'Yonah'");
+        list.add("UPDATE YCStudent SET GPA = 2.1 WHERE SSNum < 809;");
+        list.add("DELETE FROM YCStudent WHERE GPA < 3.0 OR FirstName = 'Yonah'");
         list.add("SELECT * FROM YCStudent;");
 
         ArrayList<String> list2 = new ArrayList<>();
         list2.add("INSERT INTO YCStudent (FirstName, LastName, GPA, BannerID, CurrentStudent, SSNum) VALUES ('Chad','Boniuk', 3.6 ,78002, true, 49);");
-        list2.add("INSERT INTO YCStudent (FirstName, LastName, Class, GPA, BannerID, SSNum) VALUES ('Jonah', 'Taurog', 'Senior' , 3.3 ,80009 , 100);");
+        list2.add("INSERT INTO YCStudent (FirstName, LastName, Class, GPA, BannerID, SSNum) VALUES ('Jonah', 'Taurog', 'Junior' , 3.3 ,80009 , 900);");
         list2.add("INSERT INTO YCStudent (FirstName, LastName, GPA, BannerID) VALUES ('Elana', 'Muller', 3.0, 1000909);");
         list2.add("INSERT INTO YCStudent (FirstName, LastName, GPA, SSNum, BannerID) VALUES ('Noah', 'Weiss', 3.1, 54, 04659235);");
         list2.add("SELECT * FROM YCStudent;");
         list2.add("SELECT GPA, LastName FROM YCStudent;");
-        list2.add("SELECT * FROM YCStudent ORDER BY GPA ASC, FirstName ASC, SSNum DESC;");
-        list2.add("SELECT COUNT (DISTINCT FirstName) FROM YCStudent;");
+        list2.add("SELECT FirstName, LastName FROM YCStudent ORDER BY GPA ASC, FirstName ASC, SSNum DESC;");
+        list2.add("SELECT COUNT (DISTINCT SSNum) FROM YCStudent;");
         list2.add("SELECT SUM (GPA) FROM YCStudent;");
         list2.add("SELECT AVG (SSNum) FROM YCStudent;");
         list2.add("SELECT MAX (BannerID) FROM YCStudent;");
@@ -112,11 +113,11 @@ public class Client {
         });
 
         t1.start();
-        //t2.start();
+        t2.start();
         //t3.start();
         try {
            t1.join();
-           // t2.join();
+            t2.join();
             //t3.join();
         } catch (Exception e){
             e.printStackTrace();

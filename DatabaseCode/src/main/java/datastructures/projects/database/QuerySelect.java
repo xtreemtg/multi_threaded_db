@@ -70,12 +70,11 @@ public class QuerySelect {
 
             if (columnNames[0].getColumnName().equals("*") && result.getFunctions().isEmpty() && result.getOrderBys().length == 0) {
                 toggleRowReadLock(this.rowIndexes, true);
-                toggleColumnReadLock(this.ctq.getResultSetColNames(), true);
-                ArrayList<ArrayList> resultSetTable = this.table.getTable();
-                resultSet.setTable(resultSetTable);
+               // toggleColumnReadLock(this.ctq.getResultSetColNames(), true);
+                resultSet.setTable(this.table.getTable());
                 resultSet.printWholeTable();
                 toggleRowReadLock(this.rowIndexes, false);
-                toggleColumnReadLock(this.ctq.getResultSetColNames(), false);
+                //toggleColumnReadLock(this.ctq.getResultSetColNames(), false);
 
 
             }
@@ -169,34 +168,48 @@ public class QuerySelect {
         }
 
         else{
+            ArrayList<ArrayList> resultSetColumns = new ArrayList<>();
+            int x = 0;
             Condition root = result.getWhereCondition();
-            if(root.getLeftOperand().getClass().getSimpleName().equals("ColumnID")){ //i.e. there's just one operator in query
-               evaluate(root);
+            for(ArrayList row : table.getTable()) {
+                boolean weWannaAddThisRow;
+                if (root.getLeftOperand().getClass().getSimpleName().equals("ColumnID")) { //i.e. there's just one operator in query
+                    weWannaAddThisRow = oneOperator(root, row);
+                } else {
+                    weWannaAddThisRow = inOrder(root, row);
+                }
+                if(weWannaAddThisRow){
+                    resultSetColumns.add(new ArrayList());
+                    if(!columnNames[0].getColumnName().equals("*")) {
+                        for (int i = 0; i < columnNames.length; i++) {
+                            int index = table.getColNameMap().get(columnNames[i].getColumnName());
+                            resultSetColumns.get(x).add(row.get(index));
+                        }
+                    }
+                    x++;
+                }
+
             }
-            else {
-                inOrder(root);
-            }
-            // TODO : only print specified columns
+            resultSet.setTable(resultSetColumns);
             resultSet.printWholeTable();
 
         }
 
 
     }
-    private boolean inOrder(Condition condition)
+    private boolean inOrder(Condition condition, ArrayList row)
     {
         if (condition.getOperator().toString().equals("AND")){
-            return (inOrder((Condition) condition.getLeftOperand()) && (inOrder((Condition) condition.getRightOperand())));
+            return (inOrder((Condition) condition.getLeftOperand(), row) && (inOrder((Condition) condition.getRightOperand(), row)));
         } else if (condition.getOperator().toString().equals("OR")){
-            return (inOrder((Condition) condition.getLeftOperand()) || (inOrder((Condition) condition.getRightOperand())));
+            return (inOrder((Condition) condition.getLeftOperand(), row) || (inOrder((Condition) condition.getRightOperand(), row)));
         }
         else {
-            return evaluate(condition);
+            return oneOperator(condition, row);
         }
 
     }
-    public boolean evaluate(Condition root){
-        ArrayList<ArrayList> resultSetColumns = new ArrayList<ArrayList>();
+    public boolean oneOperator(Condition root, ArrayList row){
         ColumnID id = (ColumnID)root.getLeftOperand();
         String operator = root.getOperator().toString();
         Object value = root.getRightOperand();
@@ -209,104 +222,35 @@ public class QuerySelect {
         else if(booleanMap.containsKey(id.getColumnName())){
             value = Boolean.parseBoolean(value.toString());
         }
-
-        ArrayList column = table.getColumnByName(id.getColumnName());
+        Comparable rowValue;
+        if(row.get(findIndex(root)) == null) return false;
+        else {
+            rowValue = (Comparable) row.get(findIndex(root));
+        }
         if(operator.equals("=")){
-            if(isIndexed(id.getColumnName())){
-                BTree btree = database.getBtreeMap().get(result.getFromTableNames()[0]).get(id.getColumnName());
-                ArrayList<ArrayList> listOfRows = (ArrayList<ArrayList>) btree.get((Comparable) value);
-                resultSet.setTable(listOfRows);
-                return true;
-            }
-            else {
-                for (int i = 0; i < column.size(); i++) {
-                    if (column.get(i) != null) {
-                        if (column.get(i).equals(value)) {
-                            ArrayList row = table.getRow(i);
-                            resultSetColumns.add(row);
+//            if(isIndexed(id.getColumnName())){
+//                BTree btree = database.getBtreeMap().get(result.getFromTableNames()[0]).get(id.getColumnName());
+//                ArrayList<ArrayList> listOfRows = (ArrayList<ArrayList>) btree.get((Comparable) value);
+//                resultSet.setTable(listOfRows);
+//                return true;
+//            }
+                return rowValue.equals(value);
 
-                        }
-
-                    }
-                }
-                resultSet.setTable(resultSetColumns);
-                return true;
-            }
         }
         else if(operator.equals("<")){
-
-            for (int i = 0; i < column.size(); i++) {
-                if (column.get(i) != null) {
-                    //String stringValue = String.valueOf(column.get(i));
-                    if (isLess((Comparable) column.get(i), (Comparable) value)) {
-
-
-                        ArrayList row = table.getRow(i);
-                        resultSetColumns.add(row);
-
-                    }
-
-                }
-            }
-            resultSet.setTable(resultSetColumns);
-            return true;
-
+            return isLess(rowValue, (Comparable) value);
         }
         else if(operator.equals(">")){
-            for(int i = 0; i < column.size(); i++) {
-                if (column.get(i) != null) {
-                    //String stringValue = String.valueOf(column.get(i));
-                    if (isLess((Comparable)value, (Comparable)column.get(i))){
-                        ArrayList row = table.getRow(i);
-                        resultSetColumns.add(row);
-                    }
-
-                }
-            }
-            resultSet.setTable(resultSetColumns);
-            return true;
+            return isLess((Comparable) value, rowValue);
         }
         else if(operator.equals("<>")){
-            for(int i = 0; i < column.size(); i++) {
-                if (column.get(i) != null) {
-                    if(!column.get(i).toString().equals(value.toString())) {
-                        ArrayList row = table.getRow(i);
-                        resultSetColumns.add(row);
-
-                    }
-
-                }
-            }
-            resultSet.setTable(resultSetColumns);
-            return true;
+            return !rowValue.equals(value);
         }
         else if(operator.equals(">=")){
-            for(int i = 0; i < column.size(); i++) {
-                if (column.get(i) != null) {
-                    String stringValue = String.valueOf(column.get(i));
-                    if (isLess((Comparable)value.toString(), (Comparable)stringValue) || stringValue.equals(value)){
-                        ArrayList row = table.getRow(i);
-                        resultSetColumns.add(row);
-                    }
-
-                }
-            }
-            resultSet.setTable(resultSetColumns);
-            return true;
+            return isLess((Comparable) value, rowValue) || rowValue.equals(value);
         }
         else if(operator.equals("<=")){
-            for(int i = 0; i < column.size(); i++) {
-                if (column.get(i) != null) {
-                    String stringValue = String.valueOf(column.get(i));
-                    if (isLess((Comparable)stringValue, (Comparable)value.toString()) || stringValue.equals(value)){
-                        ArrayList row = table.getRow(i);
-                        resultSetColumns.add(row);
-                    }
-
-                }
-            }
-            resultSet.setTable(resultSetColumns);
-            return true;
+            return isLess(rowValue, (Comparable) value) || rowValue.equals(value);
         }
         else{
             try {
@@ -319,6 +263,20 @@ public class QuerySelect {
 
         return true;
     }
+
+    private int findIndex(Condition condition){
+        String columnName = condition.getLeftOperand().toString();
+        int index;
+        for (int i = 0; i < tableInfo.length; i++){
+            if (columnName.equals(tableInfo[i].getColumnName())){
+                index = i;
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
     private boolean isLess(Comparable input, Comparable columnValue) {
         return input.compareTo(columnValue) < 0;
     }

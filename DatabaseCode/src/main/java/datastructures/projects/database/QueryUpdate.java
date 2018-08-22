@@ -18,10 +18,12 @@ public class QueryUpdate {
     private HashMap<String, Boolean> doubleMap = new HashMap<String, Boolean>();
     private HashMap<String, Boolean> intMap = new HashMap<String, Boolean>();
     private HashMap<String, Boolean> booleanMap = new HashMap<String, Boolean>();
+    HashMap<String, Boolean> uniqueMap = new HashMap<String, Boolean>();
 
 
     public QueryUpdate(UpdateQuery result) throws JSQLParserException {
         this.result = result;
+        //this.columnNames = result.getSelectedColumnNames();
         this.database = DBDriver.database;
         this.tableName = result.getTableName();
         this.columnValuePairs = result.getColumnValuePairs();
@@ -40,6 +42,12 @@ public class QueryUpdate {
         this.intMap = ctq.getIntMap();
         this.booleanMap = ctq.getBooleanMap();
         this.doubleMap = ctq.getDoubleMap();
+        for(int i = 0; i  < tableInfo.length; i++){
+            uniqueMap.put(tableInfo[i].getColumnName(), tableInfo[i].isUnique());
+            if (table.getPrimaryColumnName().containsKey(tableInfo[i].getColumnName())){
+                uniqueMap.put(tableInfo[i].getColumnName(), true);
+            }
+        }
     }
     public boolean isIndexed(String columnName){
         HashMap<String, BTree>  mainMap = database.getBtreeMap().get(result.getTableName());
@@ -55,33 +63,63 @@ public class QueryUpdate {
             return true;
         }
         else {
-            WHEREisNotNull();
-            return true;
+            return WHEREisNotNull();
         }
 
-
     }
 
-    private boolean isLess(Comparable input, Comparable columnValue) {
-        return input.compareTo(columnValue) < 0;
-    }
-
-    private boolean isEqual(Comparable input, Comparable columnValue) {
-        return input.compareTo(columnValue) == 0;
-    }
-
-    public void WHEREisNotNull(){ //based of the assignment - only one clause in WHERE
-        String[] columnNameArray = new String[columnValuePairs.length];
-        HashMap<String, Boolean> uniqueMap = new HashMap<String, Boolean>();
-
-        for(int i = 0; i < tableInfo.length; i++){
-            uniqueMap.put(tableInfo[i].getColumnName(), tableInfo[i].isUnique());
-            if (table.getPrimaryColumnName().containsKey(tableInfo[i].getColumnName())){
-                uniqueMap.put(tableInfo[i].getColumnName(), true);
-            }
-        }
+    public boolean WHEREisNotNull(){ //based of the assignment - only one clause in WHERE
 
         Condition root = result.getWhereCondition();
+        for(ArrayList row : table.getTable()) {
+
+            boolean weWannaUpdateThisRow;
+            if (root.getLeftOperand().getClass().getSimpleName().equals("ColumnID")) { //i.e. there's just one operator in query
+                weWannaUpdateThisRow = oneOperator(root, row);
+            } else {
+                weWannaUpdateThisRow = inOrder(root, row);
+            }
+            if(weWannaUpdateThisRow){
+                for (int i = 0; i < columnValuePairs.length; i++) {
+                    String columnName = columnValuePairs[i].getColumnID().getColumnName();
+                    if(uniqueMap.get(columnName) && table.getNumberOfRows() > 1){
+                        try {
+                            throw new IllegalArgumentException("Can't UPDATE duplicates in a UNIQUE " + columnValuePairs[i].getColumnID().getColumnName() + " column!");
+                        } catch(IllegalArgumentException e){
+                            e.printStackTrace();
+                        }
+                        return false;
+                    }
+                }
+
+                for (int i = 0; i < columnValuePairs.length; i++) {
+                    String columnName = columnValuePairs[i].getColumnID().getColumnName();
+                    int index = table.getColNameMap().get(columnName);
+                    row.set(index, setTheType(columnValuePairs[i].getValue(), columnName));
+
+                }
+            }
+
+        }
+        table.printWholeTable();
+        return true;
+    }
+
+
+
+    private boolean inOrder(Condition condition, ArrayList row)
+    {
+        if (condition.getOperator().toString().equals("AND")){
+            return (inOrder((Condition) condition.getLeftOperand(), row) && (inOrder((Condition) condition.getRightOperand(), row)));
+        } else if (condition.getOperator().toString().equals("OR")){
+            return (inOrder((Condition) condition.getLeftOperand(), row) || (inOrder((Condition) condition.getRightOperand(), row)));
+        }
+        else {
+            return oneOperator(condition, row);
+        }
+
+    }
+    public boolean oneOperator(Condition root, ArrayList row){
         ColumnID id = (ColumnID)root.getLeftOperand();
         String operator = root.getOperator().toString();
         Object value = root.getRightOperand();
@@ -94,8 +132,38 @@ public class QueryUpdate {
         else if(booleanMap.containsKey(id.getColumnName())){
             value = Boolean.parseBoolean(value.toString());
         }
+        Comparable rowValue;
+        if(row.get(findIndex(root)) == null) return false;
+        else {
+           rowValue = (Comparable) row.get(findIndex(root));
+        }
 
-        if (!operator.matches("=|>|<|<=|>=|<>")){
+        if(operator.equals("=")){
+//            if(isIndexed(id.getColumnName())){
+//                BTree btree = database.getBtreeMap().get(result.getFromTableNames()[0]).get(id.getColumnName());
+//                ArrayList<ArrayList> listOfRows = (ArrayList<ArrayList>) btree.get((Comparable) value);
+//                resultSet.setTable(listOfRows);
+//                return true;
+//            }
+            return rowValue.equals(value);
+
+        }
+        else if(operator.equals("<")){
+            return isLess(rowValue, (Comparable) value);
+        }
+        else if(operator.equals(">")){
+            return isLess((Comparable) value, rowValue);
+        }
+        else if(operator.equals("<>")){
+            return !rowValue.equals(value);
+        }
+        else if(operator.equals(">=")){
+            return isLess((Comparable) value, rowValue) || rowValue.equals(value);
+        }
+        else if(operator.equals("<=")){
+            return isLess(rowValue, (Comparable) value) || rowValue.equals(value);
+        }
+        else{
             try {
                 throw new IllegalArgumentException("Illegal WHERE condition operator!");
             } catch (IllegalArgumentException e) {
@@ -103,73 +171,33 @@ public class QueryUpdate {
             }
         }
 
-        for (int i = 0; i < columnValuePairs.length; i++){
 
-            columnNameArray[i] = columnValuePairs[i].getColumnID().getColumnName();
-            Object[] tempColumn = new Object[table.getNumberOfRows()];
-            ArrayList mainColumn = table.getColumnByName(columnNameArray[i]);
-            for (int j = 0; j < tempColumn.length; j++){
-                tempColumn[j] = mainColumn.get(j);
+        return true;
+    }
+
+    private int findIndex(Condition condition){
+        String columnName = condition.getLeftOperand().toString();
+        int index;
+        for (int i = 0; i < tableInfo.length; i++){
+            if (columnName.equals(tableInfo[i].getColumnName())){
+                index = i;
+                return index;
             }
-
-            if(!uniqueMap.get(columnNameArray[i])) {
-
-                ArrayList column = table.getColumnByName(id.getColumnName());
-                for(int j = 0; j < column.size(); j++){
-                    Boolean yes = null;
-                    switch(operator) {
-                        case "=":
-                            yes = column.get(j) != null && isEqual((Comparable) column.get(j), (Comparable) value);
-                            break;
-                        case "<":
-                            yes = column.get(j) != null && isLess((Comparable) column.get(j), (Comparable) value);
-                            break;
-                        case ">":
-                            yes = column.get(j) != null && isLess((Comparable) value, (Comparable) column.get(j));
-                            break;
-                        case "<>":
-                            yes = column.get(j) != null && (!isEqual((Comparable) column.get(j), (Comparable) value));
-                            break;
-                        case ">=":
-                            yes = column.get(j) != null && (isLess((Comparable) value, (Comparable) column.get(j)) || isEqual((Comparable) column.get(j), (Comparable) value));
-                            break;
-                        case "<=":
-                            yes = column.get(j) != null && (isLess((Comparable) column.get(j), (Comparable) value) || isEqual((Comparable) column.get(j), (Comparable) value));
-                            break;
-                    }
-                    if (yes){
-                        Object realValue = setTheType(columnValuePairs[i].getValue(), columnNameArray[i]);
-                        mainColumn.set(j, realValue);
-                    }
-                }
-                table.putColumnByName(mainColumn, columnValuePairs[i].getColumnID().getColumnName());
-
-            } else{
-                try {
-                    throw new IllegalArgumentException("Can't UPDATE duplicates in a UNIQUE " + columnValuePairs[i].getColumnID().getColumnName() + " column!");
-                } catch(IllegalArgumentException e){
-                    e.printStackTrace();
-                }
-
-            }
-
-
         }
+        return -1;
+    }
 
+    private boolean isLess(Comparable input, Comparable columnValue) {
+        return input.compareTo(columnValue) < 0;
+    }
+
+    private boolean isEqual(Comparable input, Comparable columnValue) {
+        return input.compareTo(columnValue) == 0;
     }
 
     public boolean WHEREisNull(){
 
             String[] columnNameArray = new String[columnValuePairs.length];
-            HashMap<String, Boolean> uniqueMap = new HashMap<String, Boolean>();
-
-            for(int i = 0; i < tableInfo.length; i++){
-                uniqueMap.put(tableInfo[i].getColumnName(), tableInfo[i].isUnique());
-                if (table.getPrimaryColumnName().containsKey(tableInfo[i].getColumnName())){
-                    uniqueMap.put(tableInfo[i].getColumnName(), true);
-                }
-            }
-
 
             for (int i = 0; i < columnValuePairs.length; i++){
 

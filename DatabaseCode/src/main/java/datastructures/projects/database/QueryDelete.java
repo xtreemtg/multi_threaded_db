@@ -6,6 +6,9 @@ import net.sf.jsqlparser.JSQLParserException;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 
 public class QueryDelete {
@@ -43,45 +46,77 @@ public class QueryDelete {
     }
 
     public boolean delete(){
-        if(result.getWhereCondition() == null){
-            while (table.getNumberOfRows() != 0) {
-                table.deleteRow(0);
+        try {
+
+            if (result.getWhereCondition() == null) {
+                try {
+                    lockAllRows();
+                    while (table.getNumberOfRows() != 0) {
+                        table.deleteRow(0);
+                    }
+                } finally {
+                    unlockAllRowsAndDeleteLocks();
+                }
+            } else {
+                return WHEREconditions();
             }
+            return true;
+        } catch (Exception e){
+            e.printStackTrace();
+            return false;
         }
-        else{
-            return WHEREconditions();
-        }
-        return true;
     }
 
     public boolean WHEREconditions(){
         Condition root = result.getWhereCondition();
-        if(root.getLeftOperand().getClass().getSimpleName().equals("ColumnID")){ //i.e. there's just one operator in query
-            return oneOperator(root);
+        HashMap<Integer, ReentrantReadWriteLock> lockMap = DBDriver.database.getRowLocks(tableName);
+        for(int i = table.size() - 1; i >= 0; i--){
+            ArrayList row = table.getRow(i);
+            boolean wannaDeleteThisRow;
+            if(root.getLeftOperand().getClass().getSimpleName().equals("ColumnID")){ //i.e. there's just one operator in query
+               wannaDeleteThisRow = oneOperator(root, row);
+            }
+            else {
+                wannaDeleteThisRow = inOrder(root, row);
+            }
+            if(wannaDeleteThisRow){
+                try {
+                    lockMap.get(i).writeLock().lock();
+                    table.deleteRow(i);
+                } finally {
+                    lockMap.remove(i).writeLock().unlock();
+                }
+
+            }
         }
-        else {
-            inOrder(root);
+        int x = 0;
+        HashMap<Integer, ReentrantReadWriteLock> newMap = new HashMap<>();
+        for (ReentrantReadWriteLock lock : lockMap.values()) {
+            newMap.put(x, lock); //gotta make sure row indexes are in sync with the table
+            x++;
         }
+        DBDriver.database.getInfoMap().get(tableName).put("rowLocks", newMap);
+
+        table.printWholeTable();
         return true;
     }
-    private boolean inOrder(Condition condition)
+    private boolean inOrder(Condition condition, ArrayList row)
     {
         if (condition.getOperator().toString().equals("AND")){
-            return (inOrder((Condition) condition.getLeftOperand()) && (inOrder((Condition) condition.getRightOperand())));
+            return (inOrder((Condition) condition.getLeftOperand(), row) && (inOrder((Condition) condition.getRightOperand(), row)));
         } else if (condition.getOperator().toString().equals("OR")){
-            return (inOrder((Condition) condition.getLeftOperand()) || (inOrder((Condition) condition.getRightOperand())));
+            return (inOrder((Condition) condition.getLeftOperand(), row) || (inOrder((Condition) condition.getRightOperand(), row)));
         }
         else {
-            return oneOperator(condition);
+            return oneOperator(condition, row);
         }
 
     }
 
-    public boolean oneOperator(Condition root) {
-        ColumnID id = (ColumnID) root.getLeftOperand();
+    public boolean oneOperator(Condition root, ArrayList row){
+        ColumnID id = (ColumnID)root.getLeftOperand();
         String operator = root.getOperator().toString();
         Object value = root.getRightOperand();
-        /*
         if (intMap.containsKey(id.getColumnName())){
             value = Integer.parseInt(value.toString());
         }
@@ -90,65 +125,61 @@ public class QueryDelete {
         }
         else if(booleanMap.containsKey(id.getColumnName())){
             value = Boolean.parseBoolean(value.toString());
-        } */
-        if (!table.getColNameMap().containsKey(id.getColumnName())) {
-            return false;
         }
-        if (!operator.matches("=|>|<|<=|>=|<>")) {
+        Comparable rowValue;
+        if(row.get(findIndex(root)) == null) return false;
+        else {
+            rowValue = (Comparable) row.get(findIndex(root));
+        }
+        if(operator.equals("=")){
+//            if(isIndexed(id.getColumnName())){
+//                BTree btree = database.getBtreeMap().get(result.getFromTableNames()[0]).get(id.getColumnName());
+//                ArrayList<ArrayList> listOfRows = (ArrayList<ArrayList>) btree.get((Comparable) value);
+//                resultSet.setTable(listOfRows);
+//                return true;
+//            }
+            return rowValue.equals(value);
+
+        }
+        else if(operator.equals("<")){
+            return isLess(rowValue, (Comparable) value);
+        }
+        else if(operator.equals(">")){
+            return isLess((Comparable) value, rowValue);
+        }
+        else if(operator.equals("<>")){
+            return !rowValue.equals(value);
+        }
+        else if(operator.equals(">=")){
+            return isLess((Comparable) value, rowValue) || rowValue.equals(value);
+        }
+        else if(operator.equals("<=")){
+            return isLess(rowValue, (Comparable) value) || rowValue.equals(value);
+        }
+        else{
             try {
                 throw new IllegalArgumentException("Illegal WHERE condition operator!");
             } catch (IllegalArgumentException e) {
                 e.printStackTrace();
             }
         }
-        ArrayList column = table.getColumnByName(id.getColumnName());
 
-        for (int i = column.size() - 1; i >= 0; i--) {
-            if (column.get(i) != null) {
-                String stringValue = "";
-                switch (operator) {
-                    case "=":
-                        if (column.get(i).toString().equals(value)) {
-                            table.deleteRow(i);
-                        }
-                        break;
-                    case "<":
-                        stringValue = String.valueOf(column.get(i));
-                        if (isLess((Comparable) stringValue, (Comparable) value)) {
-                            table.deleteRow(i);
-                        }
-                        break;
-                    case ">":
-                        stringValue = String.valueOf(column.get(i));
-                        if (isLess((Comparable) value, (Comparable) stringValue)) {
-                            table.deleteRow(i);
-                        }
-                        break;
-                    case "<>":
-                        if (!column.get(i).toString().equals(value)) {
-                            table.deleteRow(i);
-                        }
-                        break;
-                    case ">=":
-                        stringValue = String.valueOf(column.get(i));
-                        if (isLess((Comparable) value, (Comparable) stringValue) || stringValue.equals(value)) {
-                            table.deleteRow(i);
-                        }
-                        break;
-                    case "<=":
-                        stringValue = String.valueOf(column.get(i));
-                        if (isLess((Comparable) stringValue, (Comparable) value) || stringValue.equals(value)) {
-                            table.deleteRow(i);
-                        }
-                        break;
 
-                }
-            }
-
-        }
         return true;
     }
 
+    private int findIndex(Condition condition){
+        String columnName = condition.getLeftOperand().toString();
+        int index;
+        for (int i = 0; i < tableInfo.length; i++){
+            if (columnName.equals(tableInfo[i].getColumnName())){
+                index = i;
+                return index;
+            }
+        }
+
+        return -1;
+    }
 
     private boolean isLess(Comparable input, Comparable columnValue) {
         return input.compareTo(columnValue) < 0;
@@ -158,4 +189,14 @@ public class QueryDelete {
         return input.compareTo(columnValue) == 0;
     }
 
+    private void lockAllRows(){
+        for(int i = 0; i < table.size(); i++){
+            DBDriver.database.getRowLocks(tableName).get(i).writeLock().lock();
+        }
+    }
+    private void unlockAllRowsAndDeleteLocks(){
+        for(int i = 0; i < table.size(); i++){
+            DBDriver.database.getRowLocks(tableName).remove(i).writeLock().unlock();
+        }
+    }
 }

@@ -104,7 +104,7 @@ public class APIServer {
             long startTime = System.currentTimeMillis(); //fetch starting time
             while(!connected) {
                 long time = System.currentTimeMillis() - startTime;
-                if (time > 5000){
+                if (time > 3500){
                     break;
                 }
                 try {

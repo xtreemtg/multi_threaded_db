@@ -5,10 +5,7 @@ package datastructures.projects.database;
  * I made this lock safe using the read and write locks.
  */
 
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.*;
@@ -49,6 +46,9 @@ public class DBServer implements Runnable {
         //https://stackoverflow.com/questions/18084038/how-to-get-httpserver-to-create-multiple-httphandlers-in-parallel
 
         try {
+            File file = new File("Database.txt");
+            System.out.println(file.delete());
+
             DBDriver.getSavedDatabase();
             executor = Executors.newFixedThreadPool(20);
             // i believe the above statement makes a queue which accepts max 20 threads

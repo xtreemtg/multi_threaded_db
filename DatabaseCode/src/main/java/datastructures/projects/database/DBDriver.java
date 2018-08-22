@@ -39,7 +39,7 @@ public class DBDriver  {
             CreateIndexQuery q = (CreateIndexQuery)targum;
             ReentrantReadWriteLock l = database.getTableLock().get(q.getTableName());
             try {
-                l.writeLock().lock();
+                l.readLock().lock();
                 QueryCreateIndex createindexquery = new QueryCreateIndex(q);
                 ResultSet resultSet = new ResultSet();
                 boolean result = createindexquery.setIndex();
@@ -50,7 +50,7 @@ public class DBDriver  {
                 saveDatabase();
                 return resultSet;
             } finally {
-                l.writeLock().unlock();
+                l.readLock().unlock();
             }
 
 
@@ -59,7 +59,7 @@ public class DBDriver  {
             InsertQuery q = (InsertQuery)targum;
             ReentrantReadWriteLock l = database.getTableLock().get(q.getTableName());
             try {
-                l.writeLock().lock();
+                l.readLock().lock();
                 QueryInsert insertquery = new QueryInsert(q);
                 ResultSet resultSet = new ResultSet();
                 boolean result;
@@ -74,7 +74,7 @@ public class DBDriver  {
                 saveDatabase();
                 return resultSet;
             } finally {
-                l.writeLock().unlock();
+                l.readLock().unlock();
             }
 
         }
@@ -82,7 +82,7 @@ public class DBDriver  {
             UpdateQuery q = (UpdateQuery)targum;
             ReentrantReadWriteLock l = database.getTableLock().get(q.getTableName());
             try {
-                l.writeLock().lock();
+                l.readLock().lock();
                 QueryUpdate updatequery = new QueryUpdate(q);
                 ResultSet resultSet = new ResultSet();
                 boolean result = updatequery.update();
@@ -92,8 +92,11 @@ public class DBDriver  {
                 System.out.println();
                 saveDatabase();
                 return resultSet;
-            } finally {
-                l.writeLock().unlock();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }finally
+             {
+                l.readLock().unlock();
             }
 
         }

@@ -163,10 +163,20 @@ public class ArrayListTable implements Serializable {
     }
 
     public void putColumnByName(ArrayList column, String columnName) {
-        int columnIndex = colNameMap.get(columnName);
-        for (int i = 0; i < column.size(); i++) {
-            getRow(i).set(columnIndex, column.get(i));
+        try {
+           // DBDriver.database.getColumnLocks(tableName).get(columnName).writeLock().lock();
+            int columnIndex = colNameMap.get(columnName);
+            for (int i = 0; i < column.size(); i++) {
+                try {
+                 //   DBDriver.database.getRowLocks(tableName).get(i).writeLock().lock();
+                    getRow(i).set(columnIndex, column.get(i));
+                } finally {
+                 //   DBDriver.database.getColumnLocks(tableName).get(columnName).writeLock().unlock();
+                }
 
+            }
+        } finally {
+           // DBDriver.database.getColumnLocks(tableName).get(columnName).writeLock().unlock();
         }
 
     }
