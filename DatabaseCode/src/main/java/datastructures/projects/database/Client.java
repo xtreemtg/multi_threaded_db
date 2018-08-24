@@ -119,7 +119,7 @@ public class Client {
         });
 
         t1.start();
-        //t2.start();
+        t2.start();
         //t3.start();
         try {
 //           t1.join();

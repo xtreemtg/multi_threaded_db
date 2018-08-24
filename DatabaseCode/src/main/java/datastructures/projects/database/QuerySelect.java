@@ -260,6 +260,9 @@ public class QuerySelect {
                             rowLockMap.get(j).readLock().unlock();
                         }
                     }
+                    else{
+                        resultSet.setColumns(this.table.getColumnNames());
+                    }
 
                 }
                 resultSet.setTable(resultSetColumns);
