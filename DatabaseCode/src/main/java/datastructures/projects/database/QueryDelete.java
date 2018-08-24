@@ -4,10 +4,7 @@ package datastructures.projects.database;
 import edu.yu.cs.dataStructures.fall2016.SimpleSQLParser.*;
 import net.sf.jsqlparser.JSQLParserException;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 
@@ -21,6 +18,7 @@ public class QueryDelete {
     private HashMap<String, Boolean> doubleMap = new HashMap<String, Boolean>();
     private HashMap<String, Boolean> intMap = new HashMap<String, Boolean>();
     private HashMap<String, Boolean> booleanMap = new HashMap<String, Boolean>();
+
 
 
     public QueryDelete(DeleteQuery result) throws JSQLParserException {
@@ -49,12 +47,14 @@ public class QueryDelete {
         return resultSet;
     }
 
+
     public boolean delete(){
         try {
 
             if (result.getWhereCondition() == null) {
                 try {
                     lockAllRows();
+                    table.toggleAllColumnLocks(true, "write");
                     while (table.getNumberOfRows() != 0) {
                         table.deleteRow(0);
                     }
@@ -62,12 +62,21 @@ public class QueryDelete {
                     resultSet.setTable(table.getTable());
                 } finally {
                     unlockAllRowsAndDeleteLocks();
+                    table.toggleAllColumnLocks(false, "write");
                 }
             } else {
-                boolean success = WHEREconditions();
-                resultSet.setColumns(table.getColumnNames());
-                resultSet.setTable(table.getTable());
-                return success;
+
+                try {
+                    table.toggleAllColumnLocks(true, "write");
+                    boolean success = WHEREconditions();
+                    resultSet.setColumns(table.getColumnNames());
+                    resultSet.setTable(table.getTable());
+                    return success;
+                } catch (Exception e){
+                    e.printStackTrace();
+                } finally {
+                    table.toggleAllColumnLocks(false, "write");
+                }
 
             }
 
@@ -209,4 +218,6 @@ public class QueryDelete {
             DBDriver.database.getRowLocks(tableName).remove(i).writeLock().unlock();
         }
     }
+
+
 }

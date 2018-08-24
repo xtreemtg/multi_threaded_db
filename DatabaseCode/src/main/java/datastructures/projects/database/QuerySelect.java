@@ -16,7 +16,6 @@ public class QuerySelect {
     private QueryCreateTable ctq;
     private ColumnID[] columnNames;
     private ArrayList<String> actualColumnNames = new ArrayList<>();
-    private ArrayList<Integer> rowIndexes = new ArrayList<>();
     private HashMap<String, Boolean> doubleMap = new HashMap<String, Boolean>();
     private HashMap<String, Boolean> intMap = new HashMap<String, Boolean>();
     private HashMap<String, Boolean> booleanMap = new HashMap<String, Boolean>();
@@ -43,9 +42,6 @@ public class QuerySelect {
         for(ColumnID c : columnNames){
             this.actualColumnNames.add(c.getColumnName());
         }
-        for(int i = 0; i < table.size(); i++){
-            rowIndexes.add(i);
-        }
     }
 
     public QueryCreateTable getCtq() {
@@ -68,18 +64,25 @@ public class QuerySelect {
         if (result.getWhereCondition() == null) {
 
             if (columnNames[0].getColumnName().equals("*") && result.getFunctions().isEmpty() && result.getOrderBys().length == 0) {
-                toggleRowReadLock(this.rowIndexes, true);
-               // toggleColumnReadLock(this.ctq.getResultSetColNames(), true);
-                resultSet.setColumns(this.table.getColumnNames());
-                resultSet.setTable(this.table.getTable());
-                resultSet.setQueryResult(true);
-                toggleRowReadLock(this.rowIndexes, false);
-                //toggleColumnReadLock(this.ctq.getResultSetColNames(), false);
+                try {
+                    table.toggleAllRowLocks(true, "read");
+                    table.toggleAllColumnLocks(true, "read");
+                    resultSet.setColumns(this.table.getColumnNames());
+                    resultSet.setTable(this.table.getTable());
+                    resultSet.setQueryResult(true);
+                } catch (Exception e){
+                    e.printStackTrace();
+                    resultSet.setQueryResult(false);
+                } finally {
+                    table.toggleAllRowLocks(false, "read");
+                    table.toggleAllColumnLocks(false, "read");
+                }
+
 
             }
             else if (result.getFunctions().isEmpty() && result.getOrderBys().length == 0) {
                 try {
-                    toggleRowReadLock(this.rowIndexes, true);
+                    table.toggleAllRowLocks(true, "read");
                     toggleColumnReadLock(this.actualColumnNames, true);
                     ArrayList<ArrayList> temp = new ArrayList<ArrayList>();
                     ArrayList<String> names = new ArrayList<>();
@@ -105,16 +108,16 @@ public class QuerySelect {
                     resultSet.setQueryResult(true);
 
                 } finally {
-                    toggleRowReadLock(this.rowIndexes, false);
+                    table.toggleAllRowLocks(false, "read");
                     toggleColumnReadLock(this.actualColumnNames, false);
                 }
             }
             else if(result.getOrderBys().length != 0){
                 boolean star = actualColumnNames.get(0).equals("*");
                 try {
-                    if (star) toggleColumnReadLock(this.ctq.getResultSetColNames(), true);
+                    if (star) table.toggleAllColumnLocks(true, "read");
                     else toggleColumnReadLock(actualColumnNames, true);
-                    toggleRowReadLock(this.rowIndexes, true);
+                    table.toggleAllRowLocks(true, "read");
                     ArrayList<ArrayList> resultSetColumns = new ArrayList<ArrayList>();
                     int x = 0;
                     for (SelectQuery.OrderBy orderBys : result.getOrderBys()) {
@@ -163,9 +166,9 @@ public class QuerySelect {
                     resultSet.setQueryResult(true);
 
                 } finally {
-                    if (star) toggleColumnReadLock(this.ctq.getResultSetColNames(), false);
+                    if (star) table.toggleAllColumnLocks(false, "read");
                     else toggleColumnReadLock(actualColumnNames, false);
-                    toggleRowReadLock(this.rowIndexes, false);
+                    table.toggleAllRowLocks(false, "read");
                 }
 
             } else{
@@ -242,14 +245,7 @@ public class QuerySelect {
             rowValue = (Comparable) row.get(findIndex(root));
         }
         if(operator.equals("=")){
-//            if(isIndexed(id.getColumnName())){
-//                BTree btree = database.getBtreeMap().get(result.getFromTableNames()[0]).get(id.getColumnName());
-//                ArrayList<ArrayList> listOfRows = (ArrayList<ArrayList>) btree.get((Comparable) value);
-//                resultSet.setTable(listOfRows);
-//                return true;
-//            }
-                return rowValue.equals(value);
-
+            return rowValue.equals(value);
         }
         else if(operator.equals("<")){
             return isLess(rowValue, (Comparable) value);
@@ -271,11 +267,10 @@ public class QuerySelect {
                 throw new IllegalArgumentException("Illegal WHERE condition operator!");
             } catch (IllegalArgumentException e) {
                 e.printStackTrace();
+                return false;
             }
         }
 
-
-        return true;
     }
 
     private int findIndex(Condition condition){
@@ -302,6 +297,7 @@ public class QuerySelect {
     public void specialSELECTFunctions(){
         try {
             toggleColumnReadLock(actualColumnNames, true);
+            table.toggleAllRowLocks(true, "read");
             ArrayList<Double> resultSetColumns = new ArrayList<Double>();
             if (result.getFunctions().get(0).function.toString().equals("AVG")) {
                 if (intMap.containsKey(columnNames[0].getColumnName())) {
@@ -429,6 +425,7 @@ public class QuerySelect {
             }
         } finally {
             toggleColumnReadLock(actualColumnNames, false);
+            table.toggleAllRowLocks(false, "read");
         }
         resultSet.setTable(this.table.getTable());
         resultSet.setColumns(this.table.getColumnNames());
@@ -582,20 +579,13 @@ public class QuerySelect {
         if (columnNames.size() > 0) {
             for (String columnName : columnNames) {
                 if (toggler)
-                    this.database.getColumnLocks(result.getFromTableNames()[0]).get(columnName).readLock().lock(); //in the project we only dealt with querying from one table
+                    //in the project we only dealt with querying from one table
+                    this.database.getColumnLocks(result.getFromTableNames()[0]).get(columnName).readLock().lock();
                 else this.database.getColumnLocks(result.getFromTableNames()[0]).get(columnName).readLock().unlock();
             }
         } else throw new IllegalArgumentException("No column stated!");
     }
-    private void toggleRowReadLock(ArrayList<Integer> rows, boolean toggler){
-        if (rows.size() > 0) {
-            for (Integer rowIndex : rows) {
-                if (toggler)
-                    this.database.getRowLocks(result.getFromTableNames()[0]).get(rowIndex).readLock().lock();
-                else this.database.getRowLocks(result.getFromTableNames()[0]).get(rowIndex).readLock().unlock();
-            }
-        } else throw new IllegalArgumentException("Table is empty!");
-    }
+
 
 
 

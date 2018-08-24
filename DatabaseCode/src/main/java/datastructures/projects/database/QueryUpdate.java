@@ -5,6 +5,8 @@ import net.sf.jsqlparser.JSQLParserException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class QueryUpdate {
 
@@ -18,6 +20,7 @@ public class QueryUpdate {
     private HashMap<String, Boolean> doubleMap = new HashMap<String, Boolean>();
     private HashMap<String, Boolean> intMap = new HashMap<String, Boolean>();
     private HashMap<String, Boolean> booleanMap = new HashMap<String, Boolean>();
+    private HashSet<String> columnsToLock = new HashSet<>();
     private ResultSet resultSet;
     HashMap<String, Boolean> uniqueMap = new HashMap<String, Boolean>();
 
@@ -64,20 +67,61 @@ public class QueryUpdate {
     }
 
     public boolean update() {
-        if (result.getWhereCondition() == null) {
-            if(WHEREisNull());
-            return true;
-        }
-        else {
-            return WHEREisNotNull();
-        }
 
+            for(int i = 0; i < columnValuePairs.length; i++) {
+                columnsToLock.add(columnValuePairs[i].getColumnID().getColumnName());
+            }
+            if (result.getWhereCondition() == null) {
+                try {
+                    table.toggleAllRowLocks(true, "write");
+                    toggleLockColumns(true);
+                    return WHEREisNull();
+                } catch (Exception e){
+                    e.printStackTrace();
+                    return false;
+                } finally {
+                    table.toggleAllRowLocks(false, "write");
+                    toggleLockColumns(false);
+                }
+            } else {
+                getColumnsToLock(result.getWhereCondition());
+                try {
+                    toggleLockColumns(true);
+                    return WHEREisNotNull();
+                } catch (Exception e){
+                    e.printStackTrace();
+                    return false;
+                } finally {
+                    toggleLockColumns(false);
+                }
+
+            }
+
+
+    }
+
+    private void getColumnsToLock(Condition condition){
+        if (condition.getOperator().toString().equals("AND") || condition.getOperator().toString().equals("OR")) {
+            getColumnsToLock((Condition) condition.getLeftOperand());
+            getColumnsToLock((Condition) condition.getRightOperand());
+        } else {
+            columnsToLock.add((condition.getLeftOperand().toString()));
+        }
+    }
+    private void toggleLockColumns(boolean toggle){
+        HashMap<String, ReentrantReadWriteLock> columnLockMap = DBDriver.database.getColumnLocks(tableName);
+        for(String name : columnsToLock) {
+            if(toggle) columnLockMap.get(name).writeLock().lock();
+            else columnLockMap.get(name).writeLock().unlock();
+        }
     }
 
     public boolean WHEREisNotNull(){ //based of the assignment - only one clause in WHERE
 
         Condition root = result.getWhereCondition();
-        for(ArrayList row : table.getTable()) {
+        HashMap<Integer, ReentrantReadWriteLock> rowLockMap = DBDriver.database.getRowLocks(tableName);
+        for(int j = 0; j < table.size(); j++) {
+            ArrayList row = table.getRow(j);
 
             boolean weWannaUpdateThisRow;
             if (root.getLeftOperand().getClass().getSimpleName().equals("ColumnID")) { //i.e. there's just one operator in query
@@ -86,23 +130,31 @@ public class QueryUpdate {
                 weWannaUpdateThisRow = inOrder(root, row);
             }
             if(weWannaUpdateThisRow){
-                for (int i = 0; i < columnValuePairs.length; i++) {
-                    String columnName = columnValuePairs[i].getColumnID().getColumnName();
-                    if(uniqueMap.get(columnName) && table.getNumberOfRows() > 1){
-                        try {
-                            throw new IllegalArgumentException("Can't UPDATE duplicates in a UNIQUE " + columnValuePairs[i].getColumnID().getColumnName() + " column!");
-                        } catch(IllegalArgumentException e){
-                            e.printStackTrace();
+                try {
+                    rowLockMap.get(j).writeLock().lock();
+                    for (int i = 0; i < columnValuePairs.length; i++) {
+                        String columnName = columnValuePairs[i].getColumnID().getColumnName();
+                        if (uniqueMap.get(columnName) && table.getNumberOfRows() > 1) {
+                            try {
+                                throw new IllegalArgumentException("Can't UPDATE duplicates in a UNIQUE " + columnValuePairs[i].getColumnID().getColumnName() + " column!");
+                            } catch (IllegalArgumentException e) {
+                                e.printStackTrace();
+                            }
+                            return false;
                         }
-                        return false;
                     }
-                }
 
-                for (int i = 0; i < columnValuePairs.length; i++) {
-                    String columnName = columnValuePairs[i].getColumnID().getColumnName();
-                    int index = table.getColNameMap().get(columnName);
-                    row.set(index, setTheType(columnValuePairs[i].getValue(), columnName));
+                    for (int i = 0; i < columnValuePairs.length; i++) {
+                        String columnName = columnValuePairs[i].getColumnID().getColumnName();
+                        int index = table.getColNameMap().get(columnName);
+                        row.set(index, setTheType(columnValuePairs[i].getValue(), columnName));
 
+                    }
+                } catch (Exception e){
+                    e.printStackTrace();
+                    return false;
+                } finally {
+                    rowLockMap.get(j).writeLock().unlock();
                 }
             }
 
@@ -147,14 +199,7 @@ public class QueryUpdate {
         }
 
         if(operator.equals("=")){
-//            if(isIndexed(id.getColumnName())){
-//                BTree btree = database.getBtreeMap().get(result.getFromTableNames()[0]).get(id.getColumnName());
-//                ArrayList<ArrayList> listOfRows = (ArrayList<ArrayList>) btree.get((Comparable) value);
-//                resultSet.setTable(listOfRows);
-//                return true;
-//            }
             return rowValue.equals(value);
-
         }
         else if(operator.equals("<")){
             return isLess(rowValue, (Comparable) value);
@@ -176,11 +221,9 @@ public class QueryUpdate {
                 throw new IllegalArgumentException("Illegal WHERE condition operator!");
             } catch (IllegalArgumentException e) {
                 e.printStackTrace();
+                return false;
             }
         }
-
-
-        return true;
     }
 
     private int findIndex(Condition condition){

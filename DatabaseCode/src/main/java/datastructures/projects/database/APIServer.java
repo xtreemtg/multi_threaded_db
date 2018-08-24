@@ -41,20 +41,10 @@ public class APIServer {
         server.createContext("/ping", new PingHandler());
 
         executor = Executors.newFixedThreadPool(20);
+        // the above statement makes a queue which accepts max 20 threads
+        // and runs each thread FIFO style
         server.setExecutor(executor);
         server.start();
-
-//        new java.util.Timer().schedule(
-//                new java.util.TimerTask() {
-//                    @Override
-//                    public void run() {
-//                        System.out.println("Stopping the server..");
-//                        server.stop(1);
-//                    }
-//                },
-//                5000
-//        );
-
         System.out.println("APIServer is listening on port 8001");
     }
 
@@ -67,14 +57,16 @@ public class APIServer {
                     Map<String, Object> parameters = new HashMap<String, Object>();
                     URI requestedUri = he.getRequestURI();
                     String query = requestedUri.getRawQuery();
-                    HttpServerDemo.P.parseQuery(query, parameters);
+                    HttpServerParser.parseQuery(query, parameters);
                     query = (String) parameters.get("q");
 
                     String response = sendToDBServer(query);
                     //the above method sends the query to the DBServer and receives its response
                     if(response.equals("DB Server is down")){
-                        he.sendResponseHeaders(500, response.length());
-                    } else he.sendResponseHeaders(200, response.length());
+                        he.sendResponseHeaders(HttpURLConnection.HTTP_INTERNAL_ERROR, response.length());
+                    } else if (response.equals("Invalid query!")){
+                        he.sendResponseHeaders(HttpURLConnection.HTTP_BAD_REQUEST, response.length());
+                    } else he.sendResponseHeaders(HttpURLConnection.HTTP_OK, response.length());
 
                     OutputStream os = he.getResponseBody();
                     os.write(response.getBytes());
@@ -96,9 +88,10 @@ public class APIServer {
             //according to prof. Kelly, the SQL query must be URL Encoded
             java.net.URL obj = new URL(URL);
             HttpURLConnection con = null;
-            int responseCode = 0;
+            int responseCode = HttpURLConnection.HTTP_INTERNAL_ERROR;
             boolean connected = false;
             long startTime = System.currentTimeMillis(); //fetch starting time
+            //we allow 3.5 seconds to connect with the DBServer and if it doesn't work, we move on and return 500
             while(!connected) {
                 long time = System.currentTimeMillis() - startTime;
                 if (time > 3500){
@@ -107,7 +100,6 @@ public class APIServer {
                 try {
                     con = (HttpURLConnection) obj.openConnection(); //open the tunnel
                     con.setRequestMethod(request);
-                    con.setRequestProperty("Accept-Encoding", "identity");
                     responseCode = con.getResponseCode();
                     connected = true;
 
@@ -117,7 +109,6 @@ public class APIServer {
             }
 
             if (responseCode == HttpURLConnection.HTTP_OK) { // success
-
                 BufferedReader in = new BufferedReader(new InputStreamReader(
                         con.getInputStream()));
                 String inputLine;
@@ -125,26 +116,22 @@ public class APIServer {
 
                 while ((inputLine = in.readLine()) != null) {
                     response.append(inputLine).append("\n");
-
                 }
                 in.close();
                 return response.toString();
 
-            } else if (responseCode == 0) {
+            } else if (responseCode == HttpURLConnection.HTTP_INTERNAL_ERROR) {
                 System.out.println("DB Server is down");
                 return "DB Server is down";
 
-            } else {
+            }  else if (responseCode == HttpURLConnection.HTTP_BAD_REQUEST) {
+                System.out.println("Invalid query!");
+                return "Invalid query!";
+
+            }else {
                 System.out.println("GET request not worked");
                 return "GET request not worked";
             }
-
-        }
-        private static Object deserialize(byte[] data) throws IOException, ClassNotFoundException {
-            ByteArrayInputStream in = new ByteArrayInputStream(data);
-            ObjectInputStream is = new ObjectInputStream(in);
-            in.close();
-            return is.readObject();
 
         }
 

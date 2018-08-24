@@ -18,8 +18,8 @@ public class Client {
         ArrayList<String> list = new ArrayList<String>();
         list.add("CREATE TABLE YCStudent( BannerID int, SSNum int, FirstName varchar(255), LastName varchar(255) NOT NULL, GPA decimal(1,2) DEFAULT 0.01, CurrentStudent boolean DEFAULT true, Class varchar(255), PRIMARY KEY (BannerID) );");
         list.add("INSERT INTO YCStudent (FirstName, LastName, BannerID, CurrentStudent, SSNum) VALUES ('Noah','Potash', 80002, true, 40);");
-        list.add("INSERT INTO YCStudent (FirstName, LastName, Class, GPA, BannerID, SSNum) VALUES ('Yonah', 'Taurog', 'Senior' ,3.9 ,80001 , 38);");
-        list.add("INSERT INTO YCStudent (FirstName, LastName, GPA, BannerID) VALUES ('Basia', 'Ebel', 4.07, 8000909);");
+        list.add("INSERT INTO YCStudent (FirstName, LastName, Class, GPA, BannerID, SSNum) VALUES ('Yonah', 'Taurog', 'Senior' ,3.96 ,80001 , 38);");
+        list.add("INSERT INTO YCStudent (FirstName, LastName, GPA, BannerID) VALUES ('Basia', 'Ebel', 4.0, 8000909);");
         list.add("INSERT INTO YCStudent (FirstName, LastName, GPA, SSNum, BannerID) VALUES ('Gavriel', 'Baron', 3.9, 809, 04659234);");
         list.add("CREATE INDEX SSNum_Index on YCStudent (SSNum);");
         //TODO list.add("SELECT FirstName, LastName FROM YCStudent WHERE SSNum = 90");
@@ -32,19 +32,21 @@ public class Client {
         list.add("SELECT AVG (GPA) FROM YCStudent;");
         list.add("SELECT MAX (BannerID) FROM YCStudent;");
         list.add("SELECT FirstName, LastName, SSNum from YCStudent WHERE GPA = 3.9 OR FirstName = 'Noah' AND SSNum > 37;");
-        list.add("UPDATE YCStudent SET GPA = 2.1 WHERE SSNum < 809;");
-        list.add("DELETE FROM YCStudent WHERE GPA < 3.0 OR FirstName = 'Yonah'");
+        list.add("UPDATE YCStudent SET LastName = 'Einstein' WHERE GPA <> 4.0 OR SSNum < 809 AND Class = 'Senior';");
+        list.add("DELETE FROM YCStudent WHERE LastName = 'Potash' OR FirstName = 'Yonah'");
         list.add("SELECT * FROM YCStudent;");
 
         ArrayList<String> list2 = new ArrayList<>();
         list2.add("INSERT INTO YCStudent (FirstName, LastName, GPA, BannerID, CurrentStudent, SSNum) VALUES ('Chad','Boniuk', 3.6 ,78002, true, 49);");
         list2.add("INSERT INTO YCStudent (FirstName, LastName, Class, GPA, BannerID, SSNum) VALUES ('Donald', 'Obama', 'Junior' , 1.2 ,80009 , 900);");
-        list2.add("INSERT INTO YCStudent (Class, FirstName, LastName, GPA, BannerID) VALUES ('Sophomore', 'Elana', 'Muller', 3.8, 1000909);");
+
         list2.add("INSERT INTO YCStudent (FirstName, LastName, GPA, SSNum, BannerID) VALUES ('Noah', 'Weiss', 3.1, 54, 04659235);");
         list2.add("SELECT * FROM YCStudent;");
         list2.add("SELECT GPA, LastName FROM YCStudent;");
+        list2.add("UPDATE YCStudent SET Class = 'Super Senior' WHERE GPA < 2.5;");
         list2.add("SELECT FirstName, LastName FROM YCStudent ORDER BY GPA ASC, FirstName ASC, SSNum DESC;");
         list2.add("SELECT COUNT (DISTINCT SSNum) FROM YCStudent;");
+        list2.add("INSERT INTO YCStudent (Class, FirstName, LastName, GPA, BannerID) VALUES ('Sophomore', 'Elana', 'Muller', 3.8, 1000909);");
         list2.add("SELECT SUM (GPA) FROM YCStudent;");
         list2.add("SELECT AVG (SSNum) FROM YCStudent;");
         list2.add("SELECT MAX (BannerID) FROM YCStudent;");
@@ -113,7 +115,7 @@ public class Client {
         });
 
         t1.start();
-        t2.start();
+        //t2.start();
         //t3.start();
         try {
 //           t1.join();
@@ -130,7 +132,6 @@ public class Client {
         URL obj = new URL(URL);
         HttpURLConnection con = (HttpURLConnection) obj.openConnection(); //open the tunnel
         con.setRequestMethod("GET");
-        //con.setRequestProperty("Accept-Encoding", "identity");
         int responseCode = con.getResponseCode();
         System.out.println("GET Response Code :: " + responseCode);
         if (responseCode == HttpURLConnection.HTTP_OK) { // success

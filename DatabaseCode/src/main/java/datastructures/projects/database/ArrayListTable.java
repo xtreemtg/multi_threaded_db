@@ -250,6 +250,36 @@ public class ArrayListTable implements Serializable {
         System.out.println("printed!");
     }
 
+    public void toggleAllRowLocks(boolean toggle, String lockType){
+        HashMap<Integer, ReentrantReadWriteLock> rowLockMap = DBDriver.database.getRowLocks(tableName);
+        for(Integer index : rowLockMap.keySet()){
+            if(toggle) {
+                if(lockType.equals("write")){
+                    rowLockMap.get(index).writeLock().lock();
+                } else if(lockType.equals("read")) rowLockMap.get(index).readLock().lock();
+            } else{
+                if(lockType.equals("write")){
+                    rowLockMap.get(index).writeLock().unlock();
+                } else if(lockType.equals("read")) rowLockMap.get(index).readLock().unlock();
+            }
+        }
+    }
+
+    public void toggleAllColumnLocks(boolean toggle, String lockType){
+        HashMap<String, ReentrantReadWriteLock> rowLockMap = DBDriver.database.getColumnLocks(tableName);
+        for(String columnName : rowLockMap.keySet()){
+            if(toggle) {
+                if(lockType.equals("write")){
+                    rowLockMap.get(columnName).writeLock().lock();
+                } else if(lockType.equals("read")) rowLockMap.get(columnName).readLock().lock();
+            } else{
+                if(lockType.equals("write")){
+                    rowLockMap.get(columnName).writeLock().unlock();
+                } else if(lockType.equals("read")) rowLockMap.get(columnName).readLock().unlock();
+            }
+        }
+    }
+
 
 }
 

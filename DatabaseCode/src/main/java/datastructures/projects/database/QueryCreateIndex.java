@@ -1,4 +1,8 @@
 package datastructures.projects.database;
+/*
+ *This class that takes the parsed query and creates a btree for that column. before executing the logic, we
+ * lock the column, since we update the BTree with that column's contents, and we dont want the column changing.
+ */
 
 
 import edu.yu.cs.dataStructures.fall2016.SimpleSQLParser.CreateIndexQuery;
@@ -37,7 +41,8 @@ public class QueryCreateIndex {
 
     public boolean setIndex(){
         try {
-            this.database.getColumnLocks(result.getTableName()).get(result.getColumnName()).writeLock().lock();
+            this.database.getColumnLocks(result.getTableName()).get(result.getColumnName()).writeLock().lock(); //lock the column
+
             if (tableInfo.getIntMap().containsKey(result.getColumnName())) {
                 BTree<Integer, ArrayList<ArrayList<Integer>>> btree = new BTree<Integer, ArrayList<ArrayList<Integer>>>();
                 int columnIndex = table.getColumnIndex(result.getColumnName());

@@ -1,4 +1,8 @@
 package datastructures.projects.database;
+/*
+ *This class that takes the parsed query and adds a new row to the table with everything
+ * described in the query. Anytime we insert, we lock up all the columns since all the columns are being updated.
+ */
 
 
 import edu.yu.cs.dataStructures.fall2016.SimpleSQLParser.ColumnDescription;
@@ -40,12 +44,6 @@ public class QueryInsert {
 
 
     }
-/*
-    @Override
-    public String toString() {
-        String result = String.valueOf(insertRows());
-        return result;
-    }*/
 
     public void setColumnTypes(){
        this.intMap = ctq.getIntMap();
@@ -70,59 +68,67 @@ public class QueryInsert {
     }
 
     public boolean insertRows() {
-        ArrayList rowOfValues = new ArrayList();
-        ArrayList<String> rowOfColumnNames = new ArrayList();
-        for (ColumnValuePair cvp : columnValuePairs) {
-            String stringValue = cvp.getValue();
+        try {
+            toggleColumnWriteLock(table.getColumnNames(), true);
 
-            if(!setConstraints(stringValue, cvp)){
+            ArrayList rowOfValues = new ArrayList();
+            ArrayList<String> rowOfColumnNames = new ArrayList();
+            for (ColumnValuePair cvp : columnValuePairs) {
+                String stringValue = cvp.getValue();
+
+                if (!setConstraints(stringValue, cvp)) {
+                    return false;
+                }
+
+                Object realValue = setTheType(stringValue, cvp.getColumnID().getColumnName());
+                String columnName = cvp.getColumnID().getColumnName();
+
+
+                rowOfValues.add(realValue);
+                rowOfColumnNames.add(columnName);
+
+            }
+
+
+            if (!table.addRow(rowOfValues, rowOfColumnNames)) {
                 return false;
             }
 
-            Object realValue = setTheType(stringValue, cvp.getColumnID().getColumnName());
-            String columnName = cvp.getColumnID().getColumnName();
-
-
-
-            rowOfValues.add(realValue);
-            rowOfColumnNames.add(columnName);
-
-        }
-
-
-        if(!table.addRow(rowOfValues, rowOfColumnNames)){
-            return false;
-        }
-
-        for (int i = 0; i < rowOfColumnNames.size(); i++){
-            HashMap<String, BTree>  mainMap = database.getBtreeMap().get(result.getTableName());
-            boolean isIndexed = mainMap.containsKey(rowOfColumnNames.get(i));
-            if(isIndexed){
-                BTree btree = mainMap.get(rowOfColumnNames.get(i));
-                int columnIndex = table.getColumnIndex(rowOfColumnNames.get(i));
-                ArrayList row = table.getRow(table.getNumberOfRows() - 1);
-                Object key = row.get(columnIndex);
-                if(key != null){
-                    ArrayList<ArrayList> listOfValues = (ArrayList<ArrayList>)btree.get((Comparable) key);
-                    if(listOfValues != null){
-                        listOfValues.add(row);
-                    }
-                    else{
-                        ArrayList<ArrayList> newListOfValues = new ArrayList<ArrayList>();
-                        newListOfValues.add(row);
-                        btree.put((Comparable) key, newListOfValues);
+            for (int i = 0; i < rowOfColumnNames.size(); i++) {
+                HashMap<String, BTree> mainMap = database.getBtreeMap().get(result.getTableName());
+                boolean isIndexed = mainMap.containsKey(rowOfColumnNames.get(i));
+                if (isIndexed) {
+                    BTree btree = mainMap.get(rowOfColumnNames.get(i));
+                    int columnIndex = table.getColumnIndex(rowOfColumnNames.get(i));
+                    ArrayList row = table.getRow(table.getNumberOfRows() - 1);
+                    Object key = row.get(columnIndex);
+                    if (key != null) {
+                        ArrayList<ArrayList> listOfValues = (ArrayList<ArrayList>) btree.get((Comparable) key);
+                        if (listOfValues != null) {
+                            listOfValues.add(row);
+                        } else {
+                            ArrayList<ArrayList> newListOfValues = new ArrayList<ArrayList>();
+                            newListOfValues.add(row);
+                            btree.put((Comparable) key, newListOfValues);
+                        }
                     }
                 }
             }
-        }
 
-        setDefaultColumns();
-        if(!checkNotNullColumns() || !checkUniqueColumns()){
+            setDefaultColumns();
+            if (!checkNotNullColumns() || !checkUniqueColumns()) {
+                return false;
+            }
+
+
+            return true;
+        } catch (Exception e){
+            e.printStackTrace();
             return false;
+        } finally
+         {
+            toggleColumnWriteLock(table.getColumnNames(), false);
         }
-
-
-        return true;
 
     }
 
@@ -318,6 +324,16 @@ public class QueryInsert {
 
     public ArrayListTable table(){
         return this.table;
+    }
+
+    private void toggleColumnWriteLock(ArrayList<String> columnNames, boolean toggler){
+        if (columnNames.size() > 0) {
+            for (String columnName : columnNames) {
+                if (toggler)
+                    this.database.getColumnLocks(result.getTableName()).get(columnName).writeLock().lock(); //in the project we only dealt with querying from one table
+                else this.database.getColumnLocks(result.getTableName()).get(columnName).writeLock().unlock();
+            }
+        } else throw new IllegalArgumentException("No column stated!");
     }
 }
 

@@ -1,5 +1,9 @@
 package datastructures.projects.database;
 
+/*
+ *This class that takes the parsed query and creates a table with all it's information, and stores that
+ * information in the database. New to this project is the addition of read/write locks
+ */
 
 import edu.yu.cs.dataStructures.fall2016.SimpleSQLParser.ColumnDescription;
 import edu.yu.cs.dataStructures.fall2016.SimpleSQLParser.CreateTableQuery;
@@ -31,7 +35,6 @@ public class QueryCreateTable implements Serializable {
         this.result = result;
         this.tableName = result.getTableName();
         this.table = new ArrayListTable(this.tableName);
-        //database.storeTable(newTable);
         this.description = result.getColumnDescriptions();
         this.pColumnName = result.getPrimaryKeyColumn().getColumnName();
         this.database = DBDriver.database;
@@ -43,24 +46,13 @@ public class QueryCreateTable implements Serializable {
 
     }
 
-    @Override
-    public String toString() {
-        String resultset = "Columns in " + result.getTableName() + ": ";
-        //String newResultSet = "";
-        for (String columnName : resultSetColNames){
-            String addOn = columnName + ", ";
-            resultset = resultset.concat(addOn);
 
-        }
-        resultset = resultset.substring(0, resultset.length() - 2);
-        return resultset;
-    }
 
     public void setPrimaryKey(){
         table.setPrimaryColumnName(pColumnName);
 
     }
-
+    // each table gets a read/write lock and will lock whenever the table is accessed
     public void setLocks(){
         database.setTableLock(this.tableName, new ReentrantReadWriteLock(true));
     }

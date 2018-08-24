@@ -6,6 +6,7 @@ package datastructures.projects.database;
  */
 
 import java.io.*;
+import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.*;
@@ -28,7 +29,6 @@ public class DBServer implements Runnable {
         dbServerInstance = new DBServer();
         Thread serverThread = new Thread(dbServerInstance);
         serverThread.start(); //starts a new thread for the server
-
         try {
             serverThread.join();
         } catch (Exception e) {
@@ -42,16 +42,13 @@ public class DBServer implements Runnable {
 
     public void run() {
 
-        //most of this code i got from
-        //https://stackoverflow.com/questions/18084038/how-to-get-httpserver-to-create-multiple-httphandlers-in-parallel
-
         try {
             File file = new File("Database.txt");
             System.out.println(file.delete());
 
             DBDriver.getSavedDatabase();
             executor = Executors.newFixedThreadPool(20);
-            // i believe the above statement makes a queue which accepts max 20 threads
+            // the above statement makes a queue which accepts max 20 threads
             // and runs each thread FIFO style
 
             httpServer = HttpServer.create(new InetSocketAddress(8000), 0);
@@ -82,23 +79,14 @@ public class DBServer implements Runnable {
 
             String requestMethod = he.getRequestMethod();
             switch (requestMethod) {
-                case "GET":
+                case "GET": //we're dealing with a select query
                     Map<String, Object> parameters = new HashMap<String, Object>();
                     URI requestedUri = he.getRequestURI();
                     String query = requestedUri.getRawQuery();
-                    HttpServerDemo.P.parseQuery(query, parameters);
+                    HttpServerParser.parseQuery(query, parameters);
                     query = (String) parameters.get("q");
                     //to make it lock safe, i used the logic in this guy's code:
-                    //https://examples.javacodegeeks.com/core-java/util/concurrent/locks-concurrent/reentrantlock/java-reentrantreadwritelock-example/
-//                    ExecutorService  e = Executors.newSingleThreadExecutor();
-//                    List<Callable<Object>> calls = new ArrayList<>();
-//                    calls.add(Executors.callable(new Select(query))); //locksafe Select query
-//                    try {
-//                        e.invokeAll(calls);
-//                    } catch (InterruptedException e1) {
-//                        e1.printStackTrace();
-//                    }
-//                    e.shutdown();
+
                     try {
                         resultSet = DBDriver.executeSELECT(query);
                     } catch (JSQLParserException e) {
@@ -107,17 +95,21 @@ public class DBServer implements Runnable {
                     String response = "";
                     if(resultSet != null) {
                         response = resultSet.printWholeTable2() + "\nResult: " + resultSet.getQueryResult();
+                        he.sendResponseHeaders(200, response.length());
+                    } else{
+                        response = "Invalid query!";
+                        he.sendResponseHeaders(400, response.length());
                     }
-                    he.sendResponseHeaders(200, response.length());
+
                     OutputStream os = he.getResponseBody();
                     os.write(response.getBytes());
                     os.close();
                     break;
-                case "POST":
+                case "POST": //we're dealing with queries that actually write to the table
                     Map<String, Object> parameters2 = new HashMap<String, Object>();
                     URI requestedUri2 = he.getRequestURI();
                     String query2 = requestedUri2.getRawQuery();
-                    HttpServerDemo.P.parseQuery(query2, parameters2);
+                    HttpServerParser.parseQuery(query2, parameters2);
                     query2 = (String) parameters2.get("q");
 
                     try {
@@ -128,9 +120,11 @@ public class DBServer implements Runnable {
                     String response2 = "";
                     if(resultSet != null) {
                        response2 = resultSet.printWholeTable2() + "\nResult: " + resultSet.getQueryResult();
+                        he.sendResponseHeaders(HttpURLConnection.HTTP_OK, response2.length());
+                    } else {
+                        he.sendResponseHeaders(HttpURLConnection.HTTP_BAD_REQUEST, response2.length());
                     }
 
-                    he.sendResponseHeaders(200, response2.length());
                     OutputStream os2 = he.getResponseBody();
                     os2.write(response2.getBytes());
                     os2.close();
