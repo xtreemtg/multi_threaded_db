@@ -7,7 +7,8 @@ We first start up the resurrection server which then starts
 up the API and Database servers. 
 Then after that, every 1 second, the Resurrection server will send a ping 
 to the other 2 servers to see if they are running. If it finds those servers 
-are down, it will restart them. 
+are down, it will restart them. Additionally, if the Database Server is down, the API server
+still attemps to connect with it for 3 and a half seconds before returning at 500.
 
 Meanwhile, the way this system works is that the API server receives a SQL query
 in the form of a GET request from a client and sends that query to the Database Server.
