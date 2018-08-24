@@ -35,8 +35,9 @@ public class DBDriver  {
                 ResultSet resultSet = new ResultSet(query);
                 boolean result;
                 result = database.storeTable(ctq, ctq.getTableName());
+                database.getBtreeLocks(ctq.getTableName()).put(ctq.pColumnName(), new ReentrantReadWriteLock(true));
                 resultSet.setColumns((ctq.getResultSetColNames()));
-                resultSet.getColumnTypes().add(ctq.getResultSetColTypes());
+                resultSet.setColumnTypes((ctq.getResultSetColTypes()));
                 resultSet.setTable(ctq.getTable().getTable());
                 resultSet.setQueryResult(result);
                 resultSet.makeStringResult();
@@ -54,12 +55,22 @@ public class DBDriver  {
             CreateIndexQuery q = (CreateIndexQuery)targum;
             ReentrantReadWriteLock l = database.getTableLock().get(q.getTableName()); //acquire and lock the table lock
             try {
+                ResultSet resultSet = new ResultSet(query);
+                if (!database.getTableLock().containsKey(q.getTableName())) {
+                    System.out.println("Table " + q.getTableName() + " doesn't exist!");
+                    resultSet.setQueryResult(false);
+                    resultSet.makeStringResult();
+                    return resultSet;
+                }
                 l.readLock().lock();
                 QueryCreateIndex createindexquery = new QueryCreateIndex(q);
-                ResultSet resultSet = new ResultSet(query);
-                boolean result = createindexquery.setIndex();
-                resultSet.setColumns((createindexquery.getTableInfo().getResultSetColNames()));
-                resultSet.setTable(createindexquery.getTable().getTable());
+                boolean result;
+                if(createindexquery.getTable() == null) result = false;
+                else {
+                    result = createindexquery.setIndex();
+                    resultSet.setColumns((createindexquery.getTableInfo().getResultSetColNames()));
+                    resultSet.setTable(createindexquery.getTable().getTable());
+                }
                 resultSet.setQueryResult(result);
                 resultSet.makeStringResult();
                 System.out.println("CREATE INDEX result: " + result);
@@ -70,7 +81,9 @@ public class DBDriver  {
                 e.printStackTrace();
                 return null;
             } finally {
-                l.readLock().unlock();
+                if (l != null) {
+                    l.readLock().unlock();
+                }
             }
 
 
@@ -79,17 +92,25 @@ public class DBDriver  {
             ReentrantReadWriteLock l = null;
             try {
                 InsertQuery q = (InsertQuery)targum;
+                ResultSet resultSet = new ResultSet(query);
+                if (!database.getTableLock().containsKey(q.getTableName())) {
+                    System.out.println("Table " + q.getTableName() + " doesn't exist!");
+                    resultSet.setQueryResult(false);
+                    resultSet.makeStringResult();
+                    return resultSet;
+                }
                 l = database.getTableLock().get(q.getTableName()); //acquire and lock the table lock
                 l.readLock().lock();
                 QueryInsert insertquery = new QueryInsert(q);
-                ResultSet resultSet = new ResultSet(query);
+
                 boolean result;
                 if (insertquery.table() == null) result = false; //there needs to be a table to insert stuff into!
                 else {
                     result = insertquery.insertRows();
                     resultSet.setColumns(insertquery.getCtq().getResultSetColNames());
+                    resultSet.setTable(insertquery.table().getTable());
                 }
-                resultSet.setTable(insertquery.table().getTable());
+
                 resultSet.setQueryResult(result);
                 resultSet.makeStringResult();
                 System.out.println("INSERT result: " + result);
@@ -110,13 +131,26 @@ public class DBDriver  {
             UpdateQuery q = (UpdateQuery)targum;
             ReentrantReadWriteLock l = null;
             try {
+                ResultSet resultSet = new ResultSet(query);
+                if (!database.getTableLock().containsKey(q.getTableName())) {
+                    System.out.println("Table " + q.getTableName() + " doesn't exist!");
+                    resultSet.setQueryResult(false);
+                    resultSet.makeStringResult();
+                    return resultSet;
+                }
                 l  = database.getTableLock().get(q.getTableName());
                 l.readLock().lock(); //acquire and lock the table lock
                 QueryUpdate updatequery = new QueryUpdate(q);
-                ResultSet resultSet;
-                boolean result = updatequery.update();
-                resultSet = updatequery.getResultSet();
-                resultSet.setQueryResult(result);
+                boolean result;
+                if (updatequery.table() == null) {
+                    result = false;
+                    resultSet.setQueryResult(result);
+                }
+                else {
+                    result = updatequery.update();
+                    resultSet = updatequery.getResultSet();
+                    resultSet.setQueryResult(result);
+                }
                 resultSet.makeStringResult();
                 System.out.println("UPDATE result: " + result);
                 System.out.println();
@@ -137,14 +171,24 @@ public class DBDriver  {
             DeleteQuery q = (DeleteQuery)targum;
             ReentrantReadWriteLock l = database.getTableLock().get(q.getTableName());
             try {
+                ResultSet resultSet = new ResultSet(query);
+                if (!database.getTableLock().containsKey(q.getTableName())) {
+                    System.out.println("Table " + q.getTableName() + " doesn't exist!");
+                    resultSet.setQueryResult(false);
+                    resultSet.makeStringResult();
+                    return resultSet;
+                }
                 l.writeLock().lock();
                 QueryDelete deletequery = new QueryDelete(q);
-                ResultSet resultSet;
-                boolean result = deletequery.delete();
-                //resultSet.getColumns().add(deletequery.getCtq().getResultSetColNames());
-                //resultSet.getTable().get(0).add(result);
-                resultSet = deletequery.getResultSet();
-                resultSet.setQueryResult(result);
+                boolean result;
+                if (deletequery.table() == null) {
+                    result = false;
+                    resultSet.setQueryResult(result);
+                } else {
+                    result = deletequery.delete();
+                    resultSet = deletequery.getResultSet();
+                    resultSet.setQueryResult(result);
+                }
                 resultSet.makeStringResult();
                 System.out.println("DELETE result: " + result);
                 System.out.println();
@@ -154,7 +198,9 @@ public class DBDriver  {
                 e.printStackTrace();
                 return null;
             }finally {
-                l.writeLock().unlock();
+                if (l != null) {
+                    l.writeLock().unlock();
+                }
             }
 
         }
@@ -168,8 +214,9 @@ public class DBDriver  {
                 SelectQuery q = (SelectQuery) targum;
                 ResultSet resultSet = new ResultSet(query);
                 if (!database.getTableLock().containsKey(q.getFromTableNames()[0])) {
-                    System.out.print("Table " + q.getFromTableNames()[0] + " doesn't exist!");
+                    System.out.println("Table " + q.getFromTableNames()[0] + " doesn't exist!");
                     resultSet.setQueryResult(false);
+                    resultSet.makeStringResult();
                     return resultSet;
                 }
                 ReentrantReadWriteLock tableLock = database.getTableLock().get(q.getFromTableNames()[0]);
@@ -222,6 +269,7 @@ public class DBDriver  {
             f.close();
         } catch (Exception e){
             System.out.println("No Database detected. Creating a new one...");
+            //e.printStackTrace();
             database = new Database(); //if file doesnt exist then we make a fresh instance of database
             saveDatabase();
         }

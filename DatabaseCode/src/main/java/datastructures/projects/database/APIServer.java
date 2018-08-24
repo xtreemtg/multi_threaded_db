@@ -11,10 +11,7 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.*;
-import java.net.HttpURLConnection;
-import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.URL;
+import java.net.*;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -57,8 +54,13 @@ public class APIServer {
                     Map<String, Object> parameters = new HashMap<String, Object>();
                     URI requestedUri = he.getRequestURI();
                     String query = requestedUri.getRawQuery();
-                    HttpServerParser.parseQuery(query, parameters);
-                    query = (String) parameters.get("q");
+                    String s = URLDecoder.decode(query, System.getProperty("file.encoding"));
+                    HttpServerParser.parseQuery(s, parameters);
+
+                    //HttpServerParser isn't doing it's job correctly, so I'm hard coding the parsing
+                    //for example "UPDATE YCStudent SET Class = 'Super Senior;" would be parsed to
+                    // "UPDATE YCStudent SET Class" and that is obviously a problem
+                    query = s.substring(2);
 
                     String response = sendToDBServer(query);
                     //the above method sends the query to the DBServer and receives its response

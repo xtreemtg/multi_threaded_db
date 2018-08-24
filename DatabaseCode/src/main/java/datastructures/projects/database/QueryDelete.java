@@ -18,6 +18,7 @@ public class QueryDelete {
     private HashMap<String, Boolean> doubleMap = new HashMap<String, Boolean>();
     private HashMap<String, Boolean> intMap = new HashMap<String, Boolean>();
     private HashMap<String, Boolean> booleanMap = new HashMap<String, Boolean>();
+    private HashMap<String, ArrayList> indexedColumns = new HashMap<>();
 
 
 
@@ -25,6 +26,7 @@ public class QueryDelete {
         this.result = result;
         this.tableName = result.getTableName();
         this.table = DBDriver.database.getTable(result.getTableName());
+        if(table == null) return;
         this.ctq = (QueryCreateTable) DBDriver.database.getInfoMap().get(result.getTableName()).get("tableDescription");
         this.tableInfo = ctq.getTableInfo();
         this.resultSet = new ResultSet(result.getQueryString());
@@ -37,14 +39,36 @@ public class QueryDelete {
         this.intMap = ctq.getIntMap();
         this.booleanMap = ctq.getBooleanMap();
         this.doubleMap = ctq.getDoubleMap();
+        for (String columnName : table.getColumnNames()) {
+            if (isIndexed(columnName)) {
+                indexedColumns.put(columnName, table.getColumnByName(columnName));
+            }
+        }
     }
 
     public QueryCreateTable getCtq() {
         return ctq;
     }
 
+    public ArrayListTable table() {
+        return table;
+    }
+
     public ResultSet getResultSet() {
         return resultSet;
+    }
+
+    private void emptyBtree(){
+        for (String columnName : table.getColumnNames()) {
+            if (isIndexed(columnName)) {
+                BTree btree = DBDriver.database.getBtreeMap().get(result.getTableName()).get(columnName);
+                ArrayList column = table.getColumnByName(columnName);
+                for (Object o : column) {
+                    btree.put((Comparable) o, null);
+                }
+            }
+        }
+
     }
 
 
@@ -55,6 +79,8 @@ public class QueryDelete {
                 try {
                     lockAllRows();
                     table.toggleAllColumnLocks(true, "write");
+                    toggleBtreeLocks(true);
+                    emptyBtree();
                     while (table.getNumberOfRows() != 0) {
                         table.deleteRow(0);
                     }
@@ -63,6 +89,7 @@ public class QueryDelete {
                 } finally {
                     unlockAllRowsAndDeleteLocks();
                     table.toggleAllColumnLocks(false, "write");
+                    toggleBtreeLocks(false);
                 }
             } else {
 
@@ -89,6 +116,8 @@ public class QueryDelete {
     }
 
     public boolean WHEREconditions(){
+
+
         Condition root = result.getWhereCondition();
         HashMap<Integer, ReentrantReadWriteLock> lockMap = DBDriver.database.getRowLocks(tableName);
         for(int i = table.size() - 1; i >= 0; i--){
@@ -101,11 +130,19 @@ public class QueryDelete {
                 wannaDeleteThisRow = inOrder(root, row);
             }
             if(wannaDeleteThisRow){
+                if(resultSet.getQueryResult() == null)
+                    return false;
                 try {
                     lockMap.get(i).writeLock().lock();
+                    toggleBtreeLocks(true);
+                    for(String columnName: indexedColumns.keySet()){
+                        BTree btree = DBDriver.database.getBtreeMap().get(result.getTableName()).get(columnName);
+                        btree.put((Comparable) indexedColumns.get(columnName).get(i), null);
+                    }
                     table.deleteRow(i);
                 } finally {
                     lockMap.remove(i).writeLock().unlock();
+                    toggleBtreeLocks(false);
                 }
 
             }
@@ -154,37 +191,27 @@ public class QueryDelete {
         else {
             rowValue = (Comparable) row.get(findIndex(root));
         }
-        if(operator.equals("=")){
-//            if(isIndexed(id.getColumnName())){
-//                BTree btree = database.getBtreeMap().get(result.getFromTableNames()[0]).get(id.getColumnName());
-//                ArrayList<ArrayList> listOfRows = (ArrayList<ArrayList>) btree.get((Comparable) value);
-//                resultSet.setTable(listOfRows);
-//                return true;
-//            }
-            return rowValue.equals(value);
-
-        }
-        else if(operator.equals("<")){
-            return isLess(rowValue, (Comparable) value);
-        }
-        else if(operator.equals(">")){
-            return isLess((Comparable) value, rowValue);
-        }
-        else if(operator.equals("<>")){
-            return !rowValue.equals(value);
-        }
-        else if(operator.equals(">=")){
-            return isLess((Comparable) value, rowValue) || rowValue.equals(value);
-        }
-        else if(operator.equals("<=")){
-            return isLess(rowValue, (Comparable) value) || rowValue.equals(value);
-        }
-        else{
-            try {
-                throw new IllegalArgumentException("Illegal WHERE condition operator!");
-            } catch (IllegalArgumentException e) {
-                e.printStackTrace();
-            }
+        switch (operator) {
+            case "=":
+              return rowValue.equals(value);
+            case "<":
+                return isLess(rowValue, (Comparable) value);
+            case ">":
+                return isLess((Comparable) value, rowValue);
+            case "<>":
+                return !rowValue.equals(value);
+            case ">=":
+                return isLess((Comparable) value, rowValue) || rowValue.equals(value);
+            case "<=":
+                return isLess(rowValue, (Comparable) value) || rowValue.equals(value);
+            default:
+                try {
+                    throw new IllegalArgumentException("Illegal WHERE condition operator!");
+                } catch (IllegalArgumentException e) {
+                    e.printStackTrace();
+                    resultSet.setQueryResult(null);
+                }
+                break;
         }
 
 
@@ -220,6 +247,20 @@ public class QueryDelete {
     private void unlockAllRowsAndDeleteLocks(){
         for(int i = 0; i < table.size(); i++){
             DBDriver.database.getRowLocks(tableName).remove(i).writeLock().unlock();
+        }
+    }
+
+    public boolean isIndexed(String columnName){
+        HashMap<String, BTree>  mainMap = DBDriver.database.getBtreeMap().get(result.getTableName());
+        if(mainMap.containsKey(columnName)){
+            return true;
+        }
+        return false;
+    }
+    private void toggleBtreeLocks(boolean toggle){
+        for(String indexedColumn : indexedColumns.keySet()) {
+            if (toggle) DBDriver.database.getBtreeLocks(tableName).get(indexedColumn).writeLock().lock();
+            else DBDriver.database.getBtreeLocks(tableName).get(indexedColumn).writeLock().unlock();
         }
     }
 

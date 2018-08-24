@@ -31,8 +31,9 @@ public class Client {
         list.add("SELECT SUM (GPA) FROM YCStudent;");
         list.add("SELECT AVG (GPA) FROM YCStudent;");
         list.add("SELECT MAX (BannerID) FROM YCStudent;");
+        list.add("SELECT * FROM YCStudent WHERE SSNum = 809");
         list.add("SELECT FirstName, LastName, SSNum from YCStudent WHERE GPA = 3.9 OR FirstName = 'Noah' AND SSNum > 37;");
-        list.add("UPDATE YCStudent SET LastName = 'Einstein' WHERE GPA <> 4.0 OR SSNum < 809 AND Class = 'Senior';");
+        list.add("UPDATE YCStudent SET LastName = 'Einstein' WHERE GPA <> 4.0 AND Class = 'Senior';");
         list.add("DELETE FROM YCStudent WHERE LastName = 'Potash' OR FirstName = 'Yonah'");
         list.add("SELECT * FROM YCStudent;");
 
@@ -40,7 +41,7 @@ public class Client {
         list2.add("INSERT INTO YCStudent (FirstName, LastName, GPA, BannerID, CurrentStudent, SSNum) VALUES ('Chad','Boniuk', 3.6 ,78002, true, 49);");
         list2.add("INSERT INTO YCStudent (FirstName, LastName, Class, GPA, BannerID, SSNum) VALUES ('Donald', 'Obama', 'Junior' , 1.2 ,80009 , 900);");
 
-        list2.add("INSERT INTO YCStudent (FirstName, LastName, GPA, SSNum, BannerID) VALUES ('Noah', 'Weiss', 3.1, 54, 04659235);");
+        list2.add("INSERT INTO YCStudent (FirstName, L astName, GPA, SSNum, BannerID) VALUES ('Noah', 'Weiss', 3.1, 54, 04659235);");
         list2.add("SELECT * FROM YCStudent;");
         list2.add("SELECT GPA, LastName FROM YCStudent;");
         list2.add("UPDATE YCStudent SET Class = 'Super Senior' WHERE GPA < 2.5;");
@@ -117,8 +118,8 @@ public class Client {
             }
         });
 
-        //t1.start();
-        t2.start();
+        t1.start();
+        //t2.start();
         //t3.start();
         try {
 //           t1.join();
@@ -147,7 +148,7 @@ public class Client {
                 response.append(inputLine).append("\n");
             }
             in.close();
-            //System.out.println(response);
+            System.out.println(response);
         } else {
             System.out.println("GET request failed");
         }

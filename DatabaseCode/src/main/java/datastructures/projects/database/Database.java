@@ -41,6 +41,7 @@ public class Database implements Serializable{
             }
             tableInfoMap.put("tableDescription", ctq);
             tableInfoMap.put("columnLocks", lockList);
+            tableInfoMap.put("btreeLocks", new HashMap<String, ReentrantReadWriteLock>());
             tableInfoMap.put("rowLocks", new HashMap<Integer, ReentrantReadWriteLock>());
             infoMap.put(tablename, tableInfoMap);
             return true;
@@ -93,6 +94,10 @@ public class Database implements Serializable{
 
     public HashMap<Integer, ReentrantReadWriteLock> getRowLocks(String tableName) {
         return (HashMap<Integer, ReentrantReadWriteLock>) this.infoMap.get(tableName).get("rowLocks");
+    }
+
+    public HashMap<String, ReentrantReadWriteLock> getBtreeLocks(String tableName) {
+        return (HashMap<String, ReentrantReadWriteLock>) this.infoMap.get(tableName).get("btreeLocks");
     }
 
 }

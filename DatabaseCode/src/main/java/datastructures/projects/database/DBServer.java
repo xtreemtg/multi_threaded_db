@@ -9,6 +9,7 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -44,9 +45,6 @@ public class DBServer implements Runnable {
     public void run() {
 
         try {
-
-            //System.out.println(file.delete());
-
             DBDriver.getSavedDatabase(); //gets the database saved on the computer
             executor = Executors.newFixedThreadPool(20);
             // the above statement makes a queue which accepts max 20 threads
@@ -84,8 +82,11 @@ public class DBServer implements Runnable {
                     Map<String, Object> parameters = new HashMap<String, Object>();
                     URI requestedUri = he.getRequestURI();
                     String query = requestedUri.getRawQuery();
-                    HttpServerParser.parseQuery(query, parameters);
-                    query = (String) parameters.get("q");
+                    String s = URLDecoder.decode(query, System.getProperty("file.encoding"));
+                    HttpServerParser.parseQuery(s, parameters);
+
+                    //HttpServerParser isn't doing it's job correctly, so I'm hard coding the parsing
+                    query = s.substring(2);
 
                     String response = "";
                     if(query.equals("Delete DB")){
@@ -118,8 +119,11 @@ public class DBServer implements Runnable {
                     Map<String, Object> parameters2 = new HashMap<String, Object>();
                     URI requestedUri2 = he.getRequestURI();
                     String query2 = requestedUri2.getRawQuery();
-                    HttpServerParser.parseQuery(query2, parameters2);
-                    query2 = (String) parameters2.get("q");
+                    String s2 = URLDecoder.decode(query2, System.getProperty("file.encoding"));
+                    HttpServerParser.parseQuery(s2, parameters2);
+
+                    //HttpServerParser isn't doing it's job correctly, so I'm hard coding the parsing
+                    query2 = s2.substring(2);
 
                     try {
                         resultSet = DBDriver.execute(query2);
@@ -131,6 +135,7 @@ public class DBServer implements Runnable {
                         response2 = resultSet.stringResult();
                         he.sendResponseHeaders(HttpURLConnection.HTTP_OK, response2.length());
                     } else {
+                        response2 = "Invalid query!";
                         he.sendResponseHeaders(HttpURLConnection.HTTP_BAD_REQUEST, response2.length());
                     }
 

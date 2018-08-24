@@ -32,6 +32,7 @@ public class QueryUpdate {
         this.tableName = result.getTableName();
         this.columnValuePairs = result.getColumnValuePairs();
         this.table = this.database.getTable(result.getTableName());
+        if( table == null) return;
         this.ctq = (QueryCreateTable) this.database.getInfoMap().get(result.getTableName()).get("tableDescription");
         this.tableInfo = ctq.getTableInfo();
         this.resultSet = new ResultSet(result.getQueryString());
@@ -41,6 +42,10 @@ public class QueryUpdate {
 
     public ResultSet getResultSet() {
         return resultSet;
+    }
+
+    public ArrayListTable table() {
+        return table;
     }
 
     public QueryCreateTable getCtq() {
@@ -130,6 +135,8 @@ public class QueryUpdate {
                 weWannaUpdateThisRow = inOrder(root, row);
             }
             if(weWannaUpdateThisRow){
+                if(resultSet.getQueryResult() == null)
+                    return false;
                 try {
                     rowLockMap.get(j).writeLock().lock();
                     for (int i = 0; i < columnValuePairs.length; i++) {
@@ -201,32 +208,27 @@ public class QueryUpdate {
         else {
            rowValue = (Comparable) row.get(findIndex(root));
         }
-
-        if(operator.equals("=")){
-            return rowValue.equals(value);
-        }
-        else if(operator.equals("<")){
-            return isLess(rowValue, (Comparable) value);
-        }
-        else if(operator.equals(">")){
-            return isLess((Comparable) value, rowValue);
-        }
-        else if(operator.equals("<>")){
-            return !rowValue.equals(value);
-        }
-        else if(operator.equals(">=")){
-            return isLess((Comparable) value, rowValue) || rowValue.equals(value);
-        }
-        else if(operator.equals("<=")){
-            return isLess(rowValue, (Comparable) value) || rowValue.equals(value);
-        }
-        else{
-            try {
-                throw new IllegalArgumentException("Illegal WHERE condition operator!");
-            } catch (IllegalArgumentException e) {
-                e.printStackTrace();
-                return false;
-            }
+        switch (operator) {
+            case "=":
+                return rowValue.equals(value);
+            case "<":
+                return isLess(rowValue, (Comparable) value);
+            case ">":
+                return isLess((Comparable) value, rowValue);
+            case "<>":
+                return !rowValue.equals(value);
+            case ">=":
+                return isLess((Comparable) value, rowValue) || rowValue.equals(value);
+            case "<=":
+                return isLess(rowValue, (Comparable) value) || rowValue.equals(value);
+            default:
+                try {
+                    throw new IllegalArgumentException("Illegal WHERE condition operator!");
+                } catch (IllegalArgumentException e) {
+                    e.printStackTrace();
+                    resultSet.setQueryResult(null);
+                    return false;
+                }
         }
     }
 
@@ -261,21 +263,26 @@ public class QueryUpdate {
 
                 if(!uniqueMap.get(columnNameArray[i])) {
                     if (isIndexed(columnValuePairs[i].getColumnID().getColumnName())) {
-                        BTree btree = database.getBtreeMap().get(result.getTableName()).get(columnValuePairs[i].getColumnID().getColumnName());
-                        ArrayList column = table.getColumnByName(columnValuePairs[i].getColumnID().getColumnName());
-                        for (Object element : column) {
-                            if (element != null) {
-                                ArrayList listOfRows = (ArrayList) btree.get((Comparable) element);
-                                listOfRows.clear();
-                                btree.put((Comparable) element, null);
+                        try {
+                            toggleBtreeLock(columnValuePairs[i].getColumnID().getColumnName(), true);
+                            BTree btree = database.getBtreeMap().get(result.getTableName()).get(columnValuePairs[i].getColumnID().getColumnName());
+                            ArrayList column = table.getColumnByName(columnValuePairs[i].getColumnID().getColumnName());
+                            for (Object element : column) {
+                                if (element != null) {
+                                    ArrayList listOfRows = (ArrayList) btree.get((Comparable) element);
+                                    listOfRows.clear();
+                                    btree.put((Comparable) element, null);
+                                }
                             }
-                        }
 
-                        Object realValue = setTheType(columnValuePairs[i].getValue(), columnNameArray[i]);
-                        Arrays.fill(tempColumn, realValue);
-                        ArrayList finalColumn = new ArrayList(Arrays.asList(tempColumn));
-                        table.putColumnByName(finalColumn, columnValuePairs[i].getColumnID().getColumnName());
-                        btree.put((Comparable) realValue, table.getTable());
+                            Object realValue = setTheType(columnValuePairs[i].getValue(), columnNameArray[i]);
+                            Arrays.fill(tempColumn, realValue);
+                            ArrayList finalColumn = new ArrayList(Arrays.asList(tempColumn));
+                            table.putColumnByName(finalColumn, columnValuePairs[i].getColumnID().getColumnName());
+                            btree.put((Comparable) realValue, table.getTable());
+                        } finally {
+                            toggleBtreeLock(columnValuePairs[i].getColumnID().getColumnName(), false);
+                        }
 
                     }
                     else{
@@ -290,15 +297,17 @@ public class QueryUpdate {
                 }
                 else if (table.getNumberOfRows() <= 1) {
                     if (isIndexed(columnValuePairs[i].getColumnID().getColumnName())) {
-                        BTree btree = database.getBtreeMap().get(result.getTableName()).get(columnValuePairs[i].getColumnID().getColumnName());
-                        ArrayList column = table.getColumnByName(columnValuePairs[i].getColumnID().getColumnName());
-                        for (Object element : column) {
-                            if (element != null) {
-                                ArrayList listOfRows = (ArrayList) btree.get((Comparable) element);
-                                listOfRows.clear();
-                                btree.put((Comparable) element, null);
+                        try {
+                            toggleBtreeLock(columnValuePairs[i].getColumnID().getColumnName(), true);
+                            BTree btree = database.getBtreeMap().get(result.getTableName()).get(columnValuePairs[i].getColumnID().getColumnName());
+                            ArrayList column = table.getColumnByName(columnValuePairs[i].getColumnID().getColumnName());
+                            for (Object element : column) {
+                                if (element != null) {
+                                    ArrayList listOfRows = (ArrayList) btree.get((Comparable) element);
+                                    listOfRows.clear();
+                                    btree.put((Comparable) element, null);
+                                }
                             }
-                        }
 
                             Object realValue = setTheType(columnValuePairs[i].getValue(), columnNameArray[i]);
                             Arrays.fill(tempColumn, realValue);
@@ -307,6 +316,9 @@ public class QueryUpdate {
 
                             table.putColumnByName(finalColumn, columnValuePairs[i].getColumnID().getColumnName());
                             btree.put((Comparable) realValue, table.getTable());
+                        }finally {
+                            toggleBtreeLock(columnValuePairs[i].getColumnID().getColumnName(), false);
+                        }
 
 
                     }
@@ -416,6 +428,11 @@ public class QueryUpdate {
 
         }
         return amIValid;
+    }
+
+    private void toggleBtreeLock(String indexedColumn, boolean toggle){
+        if(toggle) DBDriver.database.getBtreeLocks(tableName).get(indexedColumn).writeLock().lock();
+        else DBDriver.database.getBtreeLocks(tableName).get(indexedColumn).writeLock().unlock();
     }
 
 }

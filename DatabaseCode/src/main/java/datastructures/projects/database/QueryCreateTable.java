@@ -52,6 +52,11 @@ public class QueryCreateTable implements Serializable {
         table.setPrimaryColumnName(pColumnName);
 
     }
+
+    public String pColumnName() {
+        return pColumnName;
+    }
+
     // each table gets a read/write lock and will lock whenever the table is accessed
     public void setLocks(){
         database.setTableLock(this.tableName, new ReentrantReadWriteLock(true));
@@ -145,6 +150,7 @@ public class QueryCreateTable implements Serializable {
                 }
             }
             database.storeBTree(result.getTableName(), pColumnName, btree);
+
         }
         else if (doubleMap.containsKey(pColumnName)){
             BTree<Double, ArrayList<ArrayList<Double>>> btree = new BTree<Double, ArrayList<ArrayList<Double>>>();
@@ -166,6 +172,7 @@ public class QueryCreateTable implements Serializable {
                 }
             }
             database.storeBTree(result.getTableName(), pColumnName, btree);
+
         }
         else if (booleanMap.containsKey(pColumnName)){
             BTree<Boolean, ArrayList<ArrayList<Boolean>>> btree = new BTree<Boolean, ArrayList<ArrayList<Boolean>>>();
@@ -190,6 +197,7 @@ public class QueryCreateTable implements Serializable {
 
             }
             database.storeBTree(result.getTableName(), pColumnName, btree);
+
         }
         else {
             BTree<String, ArrayList<ArrayList<String>>> btree = new BTree<String, ArrayList<ArrayList<String>>>();
@@ -212,6 +220,7 @@ public class QueryCreateTable implements Serializable {
 
             }
             database.storeBTree(result.getTableName(), pColumnName, btree);
+
         }
 
 

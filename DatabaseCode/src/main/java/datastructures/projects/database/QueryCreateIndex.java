@@ -12,6 +12,7 @@ import net.sf.jsqlparser.JSQLParserException;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class QueryCreateIndex {
 
@@ -23,8 +24,10 @@ public class QueryCreateIndex {
     public QueryCreateIndex(CreateIndexQuery result)throws JSQLParserException {
         this.result = result;
         this.database = DBDriver.database;
+        this.table = database.getTable(result.getTableName());
+        if(this.table == null) return;
         this.tableInfo = (QueryCreateTable) database.getInfoMap().get(result.getTableName()).get("tableDescription");
-        this.table = tableInfo.getTable();
+
         HashMap<String, BTree> mainMap = database.getBtreeMap().get(result.getTableName());
         if (mainMap == null || !mainMap.containsKey(result.getColumnName())) {
             //setIndex();
@@ -38,6 +41,7 @@ public class QueryCreateIndex {
     public ArrayListTable getTable() {
         return table;
     }
+
 
     public boolean setIndex(){
         try {
@@ -63,6 +67,7 @@ public class QueryCreateIndex {
                     }
                 }
                 database.storeBTree(result.getTableName(), result.getColumnName(), btree);
+                database.getBtreeLocks(result.getTableName()).put(result.getColumnName(), new ReentrantReadWriteLock(true));
                 return true;
             } else if (tableInfo.getDoubleMap().containsKey(result.getColumnName())) {
                 BTree<Double, ArrayList<ArrayList<Double>>> btree = new BTree<Double, ArrayList<ArrayList<Double>>>();
@@ -84,6 +89,7 @@ public class QueryCreateIndex {
                     }
                 }
                 database.storeBTree(result.getTableName(), result.getColumnName(), btree);
+                database.getBtreeLocks(result.getTableName()).put(result.getColumnName(), new ReentrantReadWriteLock(true));
                 return true;
             } else if (tableInfo.getBooleanMap().containsKey(result.getColumnName())) {
                 BTree<Boolean, ArrayList<ArrayList<Boolean>>> btree = new BTree<Boolean, ArrayList<ArrayList<Boolean>>>();
@@ -107,6 +113,7 @@ public class QueryCreateIndex {
 
                 }
                 database.storeBTree(result.getTableName(), result.getColumnName(), btree);
+                database.getBtreeLocks(result.getTableName()).put(result.getColumnName(), new ReentrantReadWriteLock(true));
                 return true;
             } else {
                 BTree<String, ArrayList<ArrayList<String>>> btree = new BTree<String, ArrayList<ArrayList<String>>>();

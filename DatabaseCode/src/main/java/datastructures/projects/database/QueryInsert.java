@@ -98,19 +98,24 @@ public class QueryInsert {
                 HashMap<String, BTree> mainMap = database.getBtreeMap().get(result.getTableName());
                 boolean isIndexed = mainMap.containsKey(rowOfColumnNames.get(i));
                 if (isIndexed) {
-                    BTree btree = mainMap.get(rowOfColumnNames.get(i));
-                    int columnIndex = table.getColumnIndex(rowOfColumnNames.get(i));
-                    ArrayList row = table.getRow(table.getNumberOfRows() - 1);
-                    Object key = row.get(columnIndex);
-                    if (key != null) {
-                        ArrayList<ArrayList> listOfValues = (ArrayList<ArrayList>) btree.get((Comparable) key);
-                        if (listOfValues != null) {
-                            listOfValues.add(row);
-                        } else {
-                            ArrayList<ArrayList> newListOfValues = new ArrayList<ArrayList>();
-                            newListOfValues.add(row);
-                            btree.put((Comparable) key, newListOfValues);
+                    try {
+                        DBDriver.database.getBtreeLocks(result.getTableName()).get(rowOfColumnNames.get(i)).writeLock().lock();
+                        BTree btree = mainMap.get(rowOfColumnNames.get(i));
+                        int columnIndex = table.getColumnIndex(rowOfColumnNames.get(i));
+                        ArrayList row = table.getRow(table.getNumberOfRows() - 1);
+                        Object key = row.get(columnIndex);
+                        if (key != null) {
+                            ArrayList<ArrayList> listOfValues = (ArrayList<ArrayList>) btree.get((Comparable) key);
+                            if (listOfValues != null) {
+                                listOfValues.add(row);
+                            } else {
+                                ArrayList<ArrayList> newListOfValues = new ArrayList<ArrayList>();
+                                newListOfValues.add(row);
+                                btree.put((Comparable) key, newListOfValues);
+                            }
                         }
+                    }finally {
+                        DBDriver.database.getBtreeLocks(result.getTableName()).get(rowOfColumnNames.get(i)).writeLock().unlock();
                     }
                 }
             }

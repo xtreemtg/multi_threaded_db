@@ -25,11 +25,12 @@ public class ResultSet {
 
 
     public ResultSet(String query){
-        columns = new ArrayList();
-        columnTypes = new ArrayList();
-        table = new ArrayList<ArrayList>();
-        ArrayList row = new ArrayList();
-        table.add(row);
+        columns = null;
+        columnTypes = null;
+        table = null;
+        queryResult = false;
+        //ArrayList row = new ArrayList();
+       // table.add(row);
         this.query = query;
     }
 
@@ -39,6 +40,10 @@ public class ResultSet {
 
     public String stringResult() {
         return stringResult;
+    }
+
+    public void setColumnTypes(ArrayList columns) {
+        this.columnTypes = columns;
     }
 
     public void setQueryResult(Object queryResult) {
@@ -93,6 +98,10 @@ public class ResultSet {
     }
 
     public void makeStringResult(){
+        if(queryResult.getClass().getSimpleName().equals("Boolean") && !((Boolean) queryResult)) {
+            this.stringResult = "Result: " + queryResult();
+            return;
+        }
         final Object[][] table = new Object[this.table.size() + 2][];
         table[0] = this.columns.toArray();
         table[1] = new ArrayList<String>(Collections.nCopies(columns.size(), "----")).toArray();
@@ -115,7 +124,7 @@ public class ResultSet {
             finalTable.append(String.format(format.toString(), row));
         }
         finalTable.append(topBottom);
-        String additional = "\nResult: " + getQueryResult();
+        String additional = "\nResult: " + queryResult();
         finalTable.append(additional);
         this.stringResult = finalTable.toString();
     }

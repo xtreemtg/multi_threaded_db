@@ -37,9 +37,9 @@ Since multiple users can access the database at once, I had to go through the pr
 making the database locksafe in order to prevent erroneous responses back to users or unwanted
 changes to the table.
 I locked down database by giving a ReentrantReadWriteLock to each table, and to each column and row within
-the table. In order to avoid deadlock, I be sure to lock and unlock
-the locks in exactly the same order. Addition, by surrounding the locks in a try/finally block,
-the locks are guaranteed to release their locks. 
+the table as well as to each Btree. In order to avoid deadlock, I be sure to lock and unlock
+the locks in exactly the same order. Addition, by surrounding the locks in a try/finally block and unlocking the
+locks in the finally block, the locks are 100% guaranteed to release their locks. 
 
 Regarding memory, everytime something is written to the database, the database gets saved.
 I have Serialized the Database object and every time theres a write, it 

@@ -8,6 +8,7 @@ import net.sf.jsqlparser.schema.Column;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class QuerySelect {
     private ArrayListTable table;
@@ -21,6 +22,9 @@ public class QuerySelect {
     private HashMap<String, Boolean> booleanMap = new HashMap<String, Boolean>();
     private Database database;
     private ResultSet resultSet;
+    private HashSet<String> columnsToLock = new HashSet<>();
+    private ArrayList<String> WHEREcolumns = new ArrayList<>();
+    private ArrayList WHEREvalues = new ArrayList<>();
 
     public QuerySelect(SelectQuery result) throws JSQLParserException {
         this.result = result;
@@ -41,6 +45,7 @@ public class QuerySelect {
         this.doubleMap = ctq.getDoubleMap();
         for(ColumnID c : columnNames){
             this.actualColumnNames.add(c.getColumnName());
+            this.columnsToLock.add(c.getColumnName());
         }
     }
 
@@ -60,7 +65,19 @@ public class QuerySelect {
         return false;
     }
 
+    private void getWHEREColumnsToLock(Condition condition){
+        if (condition.getOperator().toString().equals("AND") || condition.getOperator().toString().equals("OR")) {
+            getWHEREColumnsToLock((Condition) condition.getLeftOperand());
+            getWHEREColumnsToLock((Condition) condition.getRightOperand());
+        } else {
+            columnsToLock.add((condition.getLeftOperand().toString()));
+            WHEREcolumns.add((condition.getLeftOperand().toString()));
+            WHEREvalues.add(condition.getRightOperand());
+        }
+    }
+
     public void select() {
+
         if (result.getWhereCondition() == null) {
 
             if (columnNames[0].getColumnName().equals("*") && result.getFunctions().isEmpty() && result.getOrderBys().length == 0) {
@@ -178,36 +195,82 @@ public class QuerySelect {
 
         }
 
-        else{
-            ArrayList<ArrayList> resultSetColumns = new ArrayList<>();
-            int x = 0;
-            Condition root = result.getWhereCondition();
-            for(ArrayList row : table.getTable()) {
-                boolean weWannaAddThisRow;
-                if (root.getLeftOperand().getClass().getSimpleName().equals("ColumnID")) { //i.e. there's just one operator in query
-                    weWannaAddThisRow = oneOperator(root, row);
-                } else {
-                    weWannaAddThisRow = inOrder(root, row);
+        else{ //else there is a WHERE in the query
+            HashMap<String, ReentrantReadWriteLock> columnLockMap = DBDriver.database.getColumnLocks(result.getFromTableNames()[0]);
+            try {
+                getWHEREColumnsToLock(result.getWhereCondition());
+                for (String name : columnsToLock) {
+                    if(!name.equals("*"))
+                        columnLockMap.get(name).readLock().lock();
                 }
-                if(weWannaAddThisRow){
-                    resultSetColumns.add(new ArrayList());
-                    if(!columnNames[0].getColumnName().equals("*")) {
-                        ArrayList<String> names = new ArrayList<>();
-                        for (int i = 0; i < columnNames.length; i++) {
-                            names.add(columnNames[i].getColumnName());
-                            int index = table.getColNameMap().get(columnNames[i].getColumnName());
-                            resultSetColumns.get(x).add(row.get(index));
+                boolean allWHEREsAreIndexed = false;
+                for(String columnName : WHEREcolumns){
+                    allWHEREsAreIndexed = isIndexed(columnName);
+                    if(!allWHEREsAreIndexed) break;
+                }
+                ArrayList<ArrayList> listOfRows = null;
+                if(allWHEREsAreIndexed){
+                    listOfRows = new ArrayList<>();
+                    if(WHEREcolumns.size() == WHEREvalues.size()){
+                        for(int i = 0; i < WHEREcolumns.size(); i++){
+                            try {
+                                DBDriver.database.getBtreeLocks(result.getFromTableNames()[0]).get(WHEREcolumns.get(i)).readLock().lock();
+                                BTree btree = DBDriver.database.getBtreeMap().get(result.getFromTableNames()[0]).get(WHEREcolumns.get(i));
+                                Object value = convertValue(WHEREvalues.get(i), null, WHEREcolumns.get(i));
+                                ArrayList<ArrayList> listOfRowsInBtree = (ArrayList<ArrayList>) btree.get((Comparable) value);
+                                for (ArrayList list : listOfRowsInBtree) listOfRows.add(list);
+                            }finally {
+                                DBDriver.database.getBtreeLocks(result.getFromTableNames()[0]).get(WHEREcolumns.get(i)).readLock().unlock();
+                            }
                         }
-                        resultSet.setColumns(names);
-                    } else{
-                        resultSet.setColumns(this.table.getColumnNames());
                     }
-                    x++;
                 }
+                ArrayList<ArrayList> resultSetColumns = new ArrayList<>();
+                int x = 0;
+                Condition root = result.getWhereCondition();
+                HashMap<Integer, ReentrantReadWriteLock> rowLockMap = DBDriver.database.getRowLocks(result.getFromTableNames()[0]);
+                if(listOfRows == null) listOfRows = table.getTable();
+                for (int j = 0; j < listOfRows.size(); j++) {
+                    ArrayList row = listOfRows.get(j);
+                    boolean weWannaAddThisRow;
+                    if (root.getLeftOperand().getClass().getSimpleName().equals("ColumnID")) { //i.e. there's just one operator in query
+                        weWannaAddThisRow = oneOperator(root, row);
+                    } else {
+                        weWannaAddThisRow = inOrder(root, row);
+                    }
+                    if (weWannaAddThisRow) {
+                        if (resultSet.getQueryResult() == null) return;
+                        try {
+                            rowLockMap.get(j).readLock().lock();
+                            resultSetColumns.add(new ArrayList());
+                            if (!columnNames[0].getColumnName().equals("*")) {
+                                ArrayList<String> names = new ArrayList<>();
+                                for (int i = 0; i < columnNames.length; i++) {
+                                    names.add(columnNames[i].getColumnName());
+                                    int index = table.getColNameMap().get(columnNames[i].getColumnName());
+                                    resultSetColumns.get(x).add(row.get(index));
+                                }
+                                resultSet.setColumns(names);
+                            } else {
+                                resultSetColumns.set(j, row);
+                                resultSet.setColumns(this.table.getColumnNames());
+                            }
+                            x++;
+                        } finally {
+                            rowLockMap.get(j).readLock().unlock();
+                        }
+                    }
 
+                }
+                resultSet.setTable(resultSetColumns);
+                resultSet.setQueryResult(true);
+            } catch (Exception e){
+                e.printStackTrace();
+            } finally{
+                for (String name : columnsToLock) {
+                    if(!name.equals("*")) columnLockMap.get(name).readLock().unlock();
+                }
             }
-            resultSet.setTable(resultSetColumns);
-            resultSet.setQueryResult(true);
 
 
         }
@@ -226,53 +289,54 @@ public class QuerySelect {
         }
 
     }
-    public boolean oneOperator(Condition root, ArrayList row){
-        ColumnID id = (ColumnID)root.getLeftOperand();
-        String operator = root.getOperator().toString();
-        Object value = root.getRightOperand();
+    private Object convertValue(Object value, ColumnID id, String name){
         try {
+            if(name == null) name = id.getColumnName();
             if (value.equals("NULL")) value = null;
 
-            else if (intMap.containsKey(id.getColumnName())) {
-                value = Integer.parseInt(value.toString());
-            } else if (doubleMap.containsKey(id.getColumnName())) {
-                value = Double.parseDouble(value.toString());
-            } else if (booleanMap.containsKey(id.getColumnName())) {
-                value = Boolean.parseBoolean(value.toString());
+            else if (intMap.containsKey(name)) {
+                return Integer.parseInt(value.toString());
+            } else if (doubleMap.containsKey(name)) {
+                return Double.parseDouble(value.toString());
+            } else if (booleanMap.containsKey(name)) {
+                return Boolean.parseBoolean(value.toString());
             }
+            else return value;
         } catch (Exception e){
             throw new IllegalArgumentException(value + " is a wrong type for " + id.getColumnName());
         }
+        return null;
+    }
+    public boolean oneOperator(Condition root, ArrayList row){
+        ColumnID id = (ColumnID)root.getLeftOperand();
+        String operator = root.getOperator().toString();
+        Object value = convertValue(root.getRightOperand(), id, null);
         Comparable rowValue;
         if(row.get(findIndex(root)) == null) return false;
         else {
             rowValue = (Comparable) row.get(findIndex(root));
         }
-        if(operator.equals("=")){
-            return rowValue.equals(value);
-        }
-        else if(operator.equals("<")){
-            return isLess(rowValue, (Comparable) value);
-        }
-        else if(operator.equals(">")){
-            return isLess((Comparable) value, rowValue);
-        }
-        else if(operator.equals("<>")){
-            return !rowValue.equals(value);
-        }
-        else if(operator.equals(">=")){
-            return isLess((Comparable) value, rowValue) || rowValue.equals(value);
-        }
-        else if(operator.equals("<=")){
-            return isLess(rowValue, (Comparable) value) || rowValue.equals(value);
-        }
-        else{
-            try {
-                throw new IllegalArgumentException("Illegal WHERE condition operator!");
-            } catch (IllegalArgumentException e) {
-                e.printStackTrace();
-                return false;
-            }
+        switch (operator) {
+            case "=":
+                return rowValue.equals(value);
+            case "<":
+                return isLess(rowValue, (Comparable) value);
+            case ">":
+                return isLess((Comparable) value, rowValue);
+            case "<>":
+                return !rowValue.equals(value);
+            case ">=":
+                return isLess((Comparable) value, rowValue) || rowValue.equals(value);
+            case "<=":
+                return isLess(rowValue, (Comparable) value) || rowValue.equals(value);
+            default:
+                try {
+                    throw new IllegalArgumentException("Illegal WHERE condition operator!");
+                } catch (IllegalArgumentException e) {
+                    e.printStackTrace();
+                    resultSet.setQueryResult(null);
+                    return false;
+                }
         }
 
     }
