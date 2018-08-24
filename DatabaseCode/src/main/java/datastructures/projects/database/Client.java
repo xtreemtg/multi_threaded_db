@@ -105,17 +105,20 @@ public class Client {
         Thread t3 = new Thread(new Runnable() {
             @Override
             public void run() {
-                String query = "SELECT * FROM YCStudent;";
-                try {
-                    sendGET("http://localhost:8001/query?q=" + URLEncoder.encode(query, "UTF-8"));
-                } catch (IOException e) {
-                    e.printStackTrace();
+                for(int i  = 800; i < 2000; i++) {
+                    System.out.println(i);
+                    String query = "INSERT INTO YCStudent (FirstName, LastName, BannerID) VALUES ('Firstname" + i + "', 'Lastname" +i+ "', "+i+ ");";
+                    try {
+                        sendGET("http://localhost:8001/query?q=" + URLEncoder.encode(query, "UTF-8"));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
         });
 
-        t1.start();
-        //t2.start();
+        //t1.start();
+        t2.start();
         //t3.start();
         try {
 //           t1.join();
@@ -144,7 +147,7 @@ public class Client {
                 response.append(inputLine).append("\n");
             }
             in.close();
-            System.out.println(response);
+            //System.out.println(response);
         } else {
             System.out.println("GET request failed");
         }

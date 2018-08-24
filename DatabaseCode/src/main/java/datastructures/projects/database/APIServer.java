@@ -79,9 +79,9 @@ public class APIServer {
             if(query == null) {
                 query = "";
             }
-            else if(query.startsWith("SELECT")){
+            else if(query.matches("(SELECT|Delete DB).*")){
                 request = "GET";
-            } else if(query.matches("(SELECT|INSERT|CREATE|UPDATE|DELETE).*")){
+            } else if(query.matches("(INSERT|CREATE|UPDATE|DELETE).*")){
                 request = "POST";
             }
             String URL = "http://localhost:8000/query?q=" + URLEncoder.encode(query, "UTF-8");

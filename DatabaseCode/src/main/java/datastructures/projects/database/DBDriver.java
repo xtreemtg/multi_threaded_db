@@ -25,21 +25,21 @@ public class DBDriver  {
         SQLQuery targum;
         try {
            targum = parser.parse(query);
-        } catch (JSQLParserException e){
+        } catch (Exception e){
             e.printStackTrace();
             return null;
         }
         if (targum.getQueryString().startsWith("CREATE TABLE")){
             try {
                 QueryCreateTable ctq = new QueryCreateTable((CreateTableQuery) targum);
-                ResultSet resultSet = new ResultSet();
+                ResultSet resultSet = new ResultSet(query);
                 boolean result;
                 result = database.storeTable(ctq, ctq.getTableName());
                 resultSet.setColumns((ctq.getResultSetColNames()));
                 resultSet.getColumnTypes().add(ctq.getResultSetColTypes());
-                //resultSet.getTable().get(0).add(result);
                 resultSet.setTable(ctq.getTable().getTable());
                 resultSet.setQueryResult(result);
+                resultSet.makeStringResult();
                 System.out.println("Columns in " + ctq.getTableName() + ":" + resultSet.getColumns());
                 System.out.println("Column types in " + ctq.getTableName() + ":" + resultSet.getColumnTypes());
                 System.out.println();
@@ -56,12 +56,12 @@ public class DBDriver  {
             try {
                 l.readLock().lock();
                 QueryCreateIndex createindexquery = new QueryCreateIndex(q);
-                ResultSet resultSet = new ResultSet();
+                ResultSet resultSet = new ResultSet(query);
                 boolean result = createindexquery.setIndex();
                 resultSet.setColumns((createindexquery.getTableInfo().getResultSetColNames()));
                 resultSet.setTable(createindexquery.getTable().getTable());
                 resultSet.setQueryResult(result);
-                resultSet.printWholeTable2();
+                resultSet.makeStringResult();
                 System.out.println("CREATE INDEX result: " + result);
                 System.out.println();
                 saveDatabase();
@@ -82,17 +82,16 @@ public class DBDriver  {
                 l = database.getTableLock().get(q.getTableName()); //acquire and lock the table lock
                 l.readLock().lock();
                 QueryInsert insertquery = new QueryInsert(q);
-                ResultSet resultSet = new ResultSet();
+                ResultSet resultSet = new ResultSet(query);
                 boolean result;
                 if (insertquery.table() == null) result = false; //there needs to be a table to insert stuff into!
                 else {
                     result = insertquery.insertRows();
                     resultSet.setColumns(insertquery.getCtq().getResultSetColNames());
                 }
-                //resultSet.getTable().get(0).add(result);
                 resultSet.setTable(insertquery.table().getTable());
                 resultSet.setQueryResult(result);
-                resultSet.printWholeTable2();
+                resultSet.makeStringResult();
                 System.out.println("INSERT result: " + result);
                 System.out.println();
                 saveDatabase();
@@ -114,13 +113,11 @@ public class DBDriver  {
                 l  = database.getTableLock().get(q.getTableName());
                 l.readLock().lock(); //acquire and lock the table lock
                 QueryUpdate updatequery = new QueryUpdate(q);
-                ResultSet resultSet = new ResultSet();
+                ResultSet resultSet;
                 boolean result = updatequery.update();
-                //resultSet.getColumns().add(updatequery.getCtq().getResultSetColNames());
-                //resultSet.getTable().get(0).add(result);
                 resultSet = updatequery.getResultSet();
                 resultSet.setQueryResult(result);
-                resultSet.printWholeTable2();
+                resultSet.makeStringResult();
                 System.out.println("UPDATE result: " + result);
                 System.out.println();
                 saveDatabase();
@@ -142,13 +139,13 @@ public class DBDriver  {
             try {
                 l.writeLock().lock();
                 QueryDelete deletequery = new QueryDelete(q);
-                ResultSet resultSet = new ResultSet();
+                ResultSet resultSet;
                 boolean result = deletequery.delete();
                 //resultSet.getColumns().add(deletequery.getCtq().getResultSetColNames());
                 //resultSet.getTable().get(0).add(result);
                 resultSet = deletequery.getResultSet();
                 resultSet.setQueryResult(result);
-                resultSet.printWholeTable2();
+                resultSet.makeStringResult();
                 System.out.println("DELETE result: " + result);
                 System.out.println();
                 saveDatabase();
@@ -169,21 +166,21 @@ public class DBDriver  {
             SQLQuery targum = parser.parse(query);
             if (targum.getQueryString().startsWith("SELECT")) {
                 SelectQuery q = (SelectQuery) targum;
-                ResultSet resultSet = new ResultSet();
+                ResultSet resultSet = new ResultSet(query);
                 if (!database.getTableLock().containsKey(q.getFromTableNames()[0])) {
                     System.out.print("Table " + q.getFromTableNames()[0] + " doesn't exist!");
-                    resultSet.getTable().get(0).add(false);
+                    resultSet.setQueryResult(false);
                     return resultSet;
                 }
-                ReentrantReadWriteLock tableLock = database.getTableLock().get(q.getFromTableNames()[0]); //my project only dealt with 1 table
+                ReentrantReadWriteLock tableLock = database.getTableLock().get(q.getFromTableNames()[0]);
+                //my project only dealt with 1 table
                 // so hence we lock the table we are dealing with
                 if (tableLock.isWriteLocked()) System.out.println("waiting for edits to finish..");
                 try {
                     tableLock.readLock().lock();
                     QuerySelect selectquery = new QuerySelect(q);
                     resultSet = selectquery.getResultSet();
-                    //resultSet.getColumns().add(selectquery.getCtq().getResultSetColNames());
-                    resultSet.printWholeTable2();
+                    resultSet.makeStringResult();
                     System.out.println("SELECT result: " + resultSet.getQueryResult());
                     System.out.println();
                     return resultSet;
@@ -224,7 +221,7 @@ public class DBDriver  {
             in.close();
             f.close();
         } catch (Exception e){
-            e.printStackTrace();
+            System.out.println("No Database detected. Creating a new one...");
             database = new Database(); //if file doesnt exist then we make a fresh instance of database
             saveDatabase();
         }

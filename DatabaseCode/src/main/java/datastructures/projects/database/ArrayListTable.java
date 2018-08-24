@@ -19,27 +19,15 @@ public class ArrayListTable implements Serializable {
 
     public ArrayListTable(String tableName) {
         this.tableName = tableName;
-        table = new ArrayList<ArrayList>();
-        colNameMap = new HashMap<String, Integer>();
+        table = new ArrayList<>();
+        colNameMap = new HashMap<>();
         columnCount = 0;
-        columnUnique = new ArrayList<HashSet>();
-        primaryColumnName = new HashMap<String, Boolean>();
+        columnUnique = new ArrayList<>();
+        primaryColumnName = new HashMap<>();
 
 
     }
 
-    /*
-    Only acceptable ArrayList methods:
-
-        1. add(T e)
-        2. add(int index, T element)
-        3. get(int index)
-        4. isEmpty()
-        5. remove(int index)
-
-        6.set(int index, T element)
-        7. size()
-    */
     public String getTableName() {
         return tableName;
     }

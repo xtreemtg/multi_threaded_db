@@ -19,16 +19,26 @@ public class ResultSet {
     private ArrayList columnTypes;
     private ArrayList<ArrayList> table;
     private Object queryResult;
+    private String stringResult;
+    private String query;
 
 
 
-    public ResultSet(){
+    public ResultSet(String query){
         columns = new ArrayList();
         columnTypes = new ArrayList();
         table = new ArrayList<ArrayList>();
         ArrayList row = new ArrayList();
         table.add(row);
+        this.query = query;
+    }
 
+    public String query() {
+        return query;
+    }
+
+    public String stringResult() {
+        return stringResult;
     }
 
     public void setQueryResult(Object queryResult) {
@@ -82,7 +92,7 @@ public class ResultSet {
 
     }
 
-    public String printWholeTable2() {
+    public void makeStringResult(){
         final Object[][] table = new Object[this.table.size() + 2][];
         table[0] = this.columns.toArray();
         table[1] = new ArrayList<String>(Collections.nCopies(columns.size(), "----")).toArray();
@@ -98,15 +108,19 @@ public class ResultSet {
             topBottom.append("--------------");
         }
         format.append("\n");
-        System.out.println(topBottom);
-        StringBuilder finalTable = new StringBuilder(topBottom+ "\n");
+        String intro = "Results for query: " + query + "\n";
+        StringBuilder finalTable = new StringBuilder(intro);
+        finalTable.append(topBottom).append("\n");
         for (final Object[] row : table) {
             finalTable.append(String.format(format.toString(), row));
-            System.out.format(format.toString(), row);
         }
         finalTable.append(topBottom);
-        System.out.println(topBottom);
-       // System.out.println(finalTable.toString());
-        return finalTable.toString();
+        String additional = "\nResult: " + getQueryResult();
+        finalTable.append(additional);
+        this.stringResult = finalTable.toString();
+    }
+
+    public void printWholeTable2() {
+        System.out.println(this.stringResult);
     }
 }

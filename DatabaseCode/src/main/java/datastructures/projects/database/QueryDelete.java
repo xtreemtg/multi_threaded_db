@@ -27,7 +27,7 @@ public class QueryDelete {
         this.table = DBDriver.database.getTable(result.getTableName());
         this.ctq = (QueryCreateTable) DBDriver.database.getInfoMap().get(result.getTableName()).get("tableDescription");
         this.tableInfo = ctq.getTableInfo();
-        this.resultSet = new ResultSet();
+        this.resultSet = new ResultSet(result.getQueryString());
         setColumnTypes();
         //delete();
 
@@ -136,14 +136,18 @@ public class QueryDelete {
         ColumnID id = (ColumnID)root.getLeftOperand();
         String operator = root.getOperator().toString();
         Object value = root.getRightOperand();
-        if (intMap.containsKey(id.getColumnName())){
-            value = Integer.parseInt(value.toString());
-        }
-        else if(doubleMap.containsKey(id.getColumnName())){
-            value = Double.parseDouble(value.toString());
-        }
-        else if(booleanMap.containsKey(id.getColumnName())){
-            value = Boolean.parseBoolean(value.toString());
+        try {
+            if (value.equals("NULL")) value = null;
+
+            else if (intMap.containsKey(id.getColumnName())) {
+                value = Integer.parseInt(value.toString());
+            } else if (doubleMap.containsKey(id.getColumnName())) {
+                value = Double.parseDouble(value.toString());
+            } else if (booleanMap.containsKey(id.getColumnName())) {
+                value = Boolean.parseBoolean(value.toString());
+            }
+        } catch (Exception e){
+            throw new IllegalArgumentException(value + " is a wrong type for " + id.getColumnName());
         }
         Comparable rowValue;
         if(row.get(findIndex(root)) == null) return false;

@@ -22,10 +22,10 @@ public class Database implements Serializable{
     private HashMap<String, ReentrantReadWriteLock> lockForTables;
 
     public Database(){
-        tableStorage = new ArrayList<ArrayListTable>();
+        tableStorage = new ArrayList<>();
         infoMap = new HashMap<>();
-        mainBTreeMap = new HashMap<String, HashMap<String, BTree>>();
-        btreeMap = new HashMap<String, BTree>();
+        mainBTreeMap = new HashMap<>();
+        btreeMap = new HashMap<>();
         lockForTables = new HashMap<>();
 
     }
@@ -94,10 +94,5 @@ public class Database implements Serializable{
     public HashMap<Integer, ReentrantReadWriteLock> getRowLocks(String tableName) {
         return (HashMap<Integer, ReentrantReadWriteLock>) this.infoMap.get(tableName).get("rowLocks");
     }
-
-
-
-
-
 
 }

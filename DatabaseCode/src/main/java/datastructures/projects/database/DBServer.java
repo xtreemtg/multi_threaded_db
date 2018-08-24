@@ -24,6 +24,7 @@ public class DBServer implements Runnable {
     private HttpServer httpServer;
     private ExecutorService executor;
     private static final ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
+    private static File file = new File("Database.txt");
 
     public static void launch() {
         dbServerInstance = new DBServer();
@@ -43,10 +44,10 @@ public class DBServer implements Runnable {
     public void run() {
 
         try {
-            File file = new File("Database.txt");
-            System.out.println(file.delete());
 
-            DBDriver.getSavedDatabase();
+            //System.out.println(file.delete());
+
+            DBDriver.getSavedDatabase(); //gets the database saved on the computer
             executor = Executors.newFixedThreadPool(20);
             // the above statement makes a queue which accepts max 20 threads
             // and runs each thread FIFO style
@@ -85,20 +86,28 @@ public class DBServer implements Runnable {
                     String query = requestedUri.getRawQuery();
                     HttpServerParser.parseQuery(query, parameters);
                     query = (String) parameters.get("q");
-                    //to make it lock safe, i used the logic in this guy's code:
 
-                    try {
-                        resultSet = DBDriver.executeSELECT(query);
-                    } catch (JSQLParserException e) {
-                        e.printStackTrace();
-                    }
                     String response = "";
-                    if(resultSet != null) {
-                        response = resultSet.printWholeTable2() + "\nResult: " + resultSet.getQueryResult();
+                    if(query.equals("Delete DB")){
+                        System.out.println("File deleted: "+ file.delete());
+                        DBDriver.getSavedDatabase(); //gets the database saved on the computer
+                        response = "Database deleted!";
                         he.sendResponseHeaders(200, response.length());
-                    } else{
-                        response = "Invalid query!";
-                        he.sendResponseHeaders(400, response.length());
+                    }
+                    else {
+                        try {
+                            resultSet = DBDriver.executeSELECT(query);
+                        } catch (JSQLParserException e) {
+                            e.printStackTrace();
+                        }
+
+                        if (resultSet != null) {
+                            response = resultSet.stringResult();
+                            he.sendResponseHeaders(200, response.length());
+                        } else {
+                            response = "Invalid query!";
+                            he.sendResponseHeaders(400, response.length());
+                        }
                     }
 
                     OutputStream os = he.getResponseBody();
@@ -119,7 +128,7 @@ public class DBServer implements Runnable {
                     }
                     String response2 = "";
                     if(resultSet != null) {
-                       response2 = resultSet.printWholeTable2() + "\nResult: " + resultSet.getQueryResult();
+                        response2 = resultSet.stringResult();
                         he.sendResponseHeaders(HttpURLConnection.HTTP_OK, response2.length());
                     } else {
                         he.sendResponseHeaders(HttpURLConnection.HTTP_BAD_REQUEST, response2.length());
@@ -147,7 +156,7 @@ public class DBServer implements Runnable {
     }
 }
 
-    //https://www.codeproject.com/Tips/1040097/Create-a-Simple-Web-Server-in-Java-HTTP-Server
+
 
 
 
